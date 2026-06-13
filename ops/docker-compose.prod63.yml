@@ -46,9 +46,15 @@ services:
       # lets DATABASE_URL / ORACLE_HOST target a host-exposed address (host.docker.internal) on Linux.
       - "host.docker.internal:host-gateway"
     volumes:
-      # ora2pg migration runs only (the backend execs ora2pg in ORA2PG_CONTAINER). Remove if ora2pg
-      # runs are not used on prod.
+      # ora2pg migration runs (the backend execs ora2pg in ORA2PG_CONTAINER over the docker socket).
       - /var/run/docker.sock:/var/run/docker.sock
+      # prompt 10 (defect fix): the shared ora2pg scripts dir. The backend WRITES the generated perl
+      # scripts (probe_cols.pl, discover_keys.pl, source_*.pl, per-run ora2pg.conf) here at runtime; the
+      # ora2pg container mounts the SAME named volume at /config to run them. Self-populating on a clean
+      # volume — required so probe_cols / Verify / streaming do not die with
+      # "No such file /opt/ora2pg/probe_cols.pl". The ora2pg container (provided separately) must mount
+      # the same volume: `-v ${ORA2PG_VOLUME:-mdp_ora2pg_config}:/config`.
+      - ora2pg_config:/opt/ora2pg
     restart: unless-stopped
     healthcheck:
       test:
@@ -99,3 +105,7 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  ora2pg_config:
+    # Explicit name so an ora2pg container in a SEPARATE project can mount the same volume at /config.
+    # Default = the v0.1.4 name (mdp_ora2pg_config). Self-populated by the backend on a clean volume.
+    name: ${ORA2PG_VOLUME:-mdp_ora2pg_config}

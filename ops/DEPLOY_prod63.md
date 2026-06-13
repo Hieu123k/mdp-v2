@@ -44,8 +44,15 @@ docker compose -f docker-compose.prod63.yml --env-file .env.prod63 -p mdp up -d 
   new compose from the SAME project, so confirm the prod Postgres is NOT in project `mdp` before reusing
   that name, else use a distinct project + external DATABASE_URL.)
 - **Smoke:** `GET https://10.116.204.63:8456/api/health` → 200; login; Type A inbound/outbound; Type B.
-- The ora2pg container (for migration runs) is provided separately (`ORA2PG_CONTAINER`); streaming reads
-  Oracle directly via `ORACLE_*`.
+- **ora2pg scripts volume (required for probe / Verify / streaming):** the backend writes its generated
+  perl scripts into `/opt/ora2pg` (the named volume `${ORA2PG_VOLUME:-mdp_ora2pg_config}`, mounted by this
+  compose). The ora2pg container (provided separately, `ORA2PG_CONTAINER`) MUST mount the **same** volume
+  at `/config`, e.g.:
+  ```
+  docker run -d --name ora2pg --network <mdp net> -v mdp_ora2pg_config:/config <ora2pg image>
+  ```
+  (When reusing v0.1.4's ora2pg, it already mounts `mdp_ora2pg_config:/config` — keep that name.) Streaming
+  reads Oracle through this script path; the volume self-populates on a clean deploy.
 
 ## 4) Dedicated Grafana @ :3001 (coexist)
 ```

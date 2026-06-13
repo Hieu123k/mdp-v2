@@ -48,6 +48,13 @@ services:
       STREAMING_ENABLED: ${STREAMING_ENABLED:-false}
       STREAMING_INTERVAL: ${STREAMING_INTERVAL:-60}
       ORA2PG_SOURCE_COUNT_ENABLED: ${ORA2PG_SOURCE_COUNT_ENABLED:-false}
+    volumes:
+      # prompt 10: shared ora2pg scripts dir. The backend WRITES the generated perl scripts (probe_cols.pl,
+      # discover_keys.pl, source_*.pl) here at runtime; an ora2pg container mounts the same named volume at
+      # /config to run them. Without this mount /opt/ora2pg is missing and probe / Verify / streaming fail
+      # with "No such file /opt/ora2pg/probe_cols.pl". DEV has no ora2pg container yet, but the dir must
+      # exist for consistency once Oracle is wired.
+      - ora2pg_config:/opt/ora2pg
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,3 +143,4 @@ volumes:
   caddy_data:
   caddy_config:
   grafana_data:
+  ora2pg_config:
