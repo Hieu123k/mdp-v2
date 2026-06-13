@@ -1,0 +1,37 @@
+# TIPA V2.0 simulation stack — Node-RED ESB simulator, SEPARATE from the MDP ops stack.
+# Generates/pushes demo data into MDP V2 (Type A inbound) so Grafana can report on the data model's
+# OUTBOUND. Isolated project `mdpv2-sim`; coexists with the MDP `mdpv2` stack and never touches the
+# shared VPS services (nodered:1880, OpenRemote, neuron, postgres_uns, umh-core, shared grafana ...).
+#
+#   cd simulation && docker compose -f docker-compose.sim.yml --env-file .env up -d
+#
+# Joins the existing MDP network `mdpv2_default` (external) so the simulation flow can POST to
+# http://reverse-proxy:8456/api/inbound/{model}. Host port 1881 (verified free; NEVER 1880).
+name: mdpv2-sim
+
+services:
+  nodered:
+    image: nodered/node-red:4.0.9
+    container_name: mdpv2-nodered
+    environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      # Node-RED credential encryption secret (generated on the VM; in .env, chmod 600, git-ignored).
+      NODE_RED_CREDENTIAL_SECRET: ${NODE_RED_CREDENTIAL_SECRET}
+      # MDP target for the simulation flow — read by the flow's function via env.get(), NOT hardcoded.
+      MDP_BASE_URL: ${MDP_BASE_URL:-http://reverse-proxy:8456}
+      MDP_INBOUND_KEY: ${MDP_INBOUND_KEY}
+    ports:
+      - "${NODERED_PORT:-1881}:1880"
+    volumes:
+      - nodered_data:/data
+    networks:
+      - mdpv2_default
+    restart: unless-stopped
+
+networks:
+  # The MDP stack's network (created by ops/docker-compose.v2.yml). external = do not create/own it.
+  mdpv2_default:
+    external: true
+
+volumes:
+  nodered_data:

@@ -1,0 +1,6 @@
+# Node-RED encrypted credentials — NEVER commit/push (secret). Lives only on the VM.
+flows_cred.json
+# Node-RED runtime/state
+.node-red/
+node_modules/
+*.backup

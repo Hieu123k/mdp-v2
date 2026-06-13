@@ -1,0 +1,21 @@
+# Grafana Infinity datasource — reads MDP **OUTBOUND** (the data model's output), NOT raw tables.
+# Every query hits GET http://reverse-proxy:8456/api/outbound/{model} (internal mdpv2_default
+# network), which applies Type B joins / latest_only / scope and wraps the {code,message,data}
+# envelope. Auth = a custom header X-API-Key carrying an OUTBOUND-scoped API key, interpolated from
+# the Grafana container env ($GRAFANA_MDP_API_KEY, fed from ops/.env). No secret is stored here.
+# allowedHosts restricts Infinity to the MDP edge only.
+apiVersion: 1
+
+datasources:
+  - name: MDP Outbound
+    uid: mdp_outbound
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    isDefault: false
+    editable: false
+    jsonData:
+      httpHeaderName1: X-API-Key
+      allowedHosts:
+        - http://reverse-proxy:8456
+    secureJsonData:
+      httpHeaderValue1: $GRAFANA_MDP_API_KEY

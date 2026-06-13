@@ -1,0 +1,107 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 0,
+  "schemaVersion": 39,
+  "tags": ["mdp", "v2", "outbound"],
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "MDP Outbound (data model)",
+  "uid": "mdp_outbound",
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "sim_reading records (outbound count)",
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mdp_outbound" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^records$/", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mdp_outbound" },
+          "type": "json", "source": "url", "format": "table", "parser": "backend",
+          "url": "http://reverse-proxy:8456/api/outbound/sim_reading?limit=500",
+          "url_options": { "method": "GET" },
+          "root_selector": "data",
+          "columns": [ { "selector": "count", "text": "records", "type": "number" } ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "barchart",
+      "title": "Readings per machine — Type B aggregate via outbound (view → model → /outbound)",
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mdp_outbound" },
+      "gridPos": { "h": 9, "w": 16, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 80 } }, "overrides": [] },
+      "options": { "xField": "machine", "orientation": "auto", "showValue": "auto", "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mdp_outbound" },
+          "type": "json", "source": "url", "format": "table", "parser": "backend",
+          "url": "http://reverse-proxy:8456/api/outbound/sim_machine_summary?limit=100",
+          "url_options": { "method": "GET" },
+          "root_selector": "data.data",
+          "columns": [
+            { "selector": "machine", "text": "machine", "type": "string" },
+            { "selector": "reading_count", "text": "reading_count", "type": "number" },
+            { "selector": "avg_value", "text": "avg_value", "type": "number" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Latest readings — GET /api/outbound/sim_reading?limit=100",
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mdp_outbound" },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mdp_outbound" },
+          "type": "json", "source": "url", "format": "table", "parser": "backend",
+          "url": "http://reverse-proxy:8456/api/outbound/sim_reading?limit=100",
+          "url_options": { "method": "GET" },
+          "root_selector": "data.data",
+          "columns": [
+            { "selector": "reading_id", "text": "reading_id", "type": "string" },
+            { "selector": "machine", "text": "machine", "type": "string" },
+            { "selector": "metric", "text": "metric", "type": "string" },
+            { "selector": "value", "text": "value", "type": "number" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Filtered — GET /api/outbound/sim_reading?machine=M-01",
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mdp_outbound" },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 9 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mdp_outbound" },
+          "type": "json", "source": "url", "format": "table", "parser": "backend",
+          "url": "http://reverse-proxy:8456/api/outbound/sim_reading?machine=M-01&limit=100",
+          "url_options": { "method": "GET" },
+          "root_selector": "data.data",
+          "columns": [
+            { "selector": "reading_id", "text": "reading_id", "type": "string" },
+            { "selector": "machine", "text": "machine", "type": "string" },
+            { "selector": "value", "text": "value", "type": "number" }
+          ]
+        }
+      ]
+    }
+  ]
+}

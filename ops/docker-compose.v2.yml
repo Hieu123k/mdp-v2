@@ -107,10 +107,19 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-http://localhost:3001}
-      # Read-only Postgres role used by the provisioned datasource (interpolated into
+      # P2/B: Infinity datasource plugin — lets Grafana read MDP OUTBOUND (data model output) over
+      # HTTP instead of querying tables directly. NOTE: grafana-cli does not parse the `id@version`
+      # form (it 404s), so we install by id; this resolved to v3.8.0 (recorded in the report) and is
+      # then pinned in the grafana_data volume. To hard-pin from scratch, run inside the container:
+      #   grafana cli --pluginsDir /var/lib/grafana/plugins plugins install yesoreyeram-infinity-datasource 3.8.0
+      GF_INSTALL_PLUGINS: yesoreyeram-infinity-datasource
+      # Read-only Postgres role used by the P1 Postgres datasource (interpolated into
       # provisioning/datasources/postgres.yml). Never the MDP app user.
       GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_ro}
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD}
+      # P2/B: outbound-scoped MDP API key for the Infinity datasource (provisioning/datasources/
+      # infinity.yml interpolates it into the X-API-Key header). From ops/.env; never literal.
+      GRAFANA_MDP_API_KEY: ${GRAFANA_MDP_API_KEY}
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     volumes:
