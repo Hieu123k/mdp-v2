@@ -1117,6 +1117,8 @@ export type StreamingRunResult = {
 };
 
 export const streamingStatus = () => req<StreamingStatus>("/streaming/status");
+// prompt 06: read just the per-table config rows (enabled/ts_col/pk/mode) for the inline row switch.
+export const streamingConfigList = () => req<{ tables: StreamingTable[] }>("/streaming/config");
 export const streamingUpdateConfig = (table: string, body: StreamingConfigUpdate) =>
   req<StreamingTable>(`/streaming/config/${encodeURIComponent(table)}`, {
     method: "PUT",

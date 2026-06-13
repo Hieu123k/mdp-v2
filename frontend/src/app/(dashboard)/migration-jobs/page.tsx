@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  AlertTriangle,
   Eye,
   History,
   Pencil,
@@ -46,11 +47,15 @@ import {
   updateMigrationJob,
   updateMigrationRun,
   validateMigrationTarget,
+  streamingConfigList,
+  streamingUpdateConfig,
   type MigrationJob,
   type MigrationRun,
   type MigrationTemplate,
+  type StreamingTable,
   type TargetValidationResult,
 } from "@/lib/api";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 
 const RUN_TYPES = ["full_load", "incremental", "validation_only", "external_bulk"];
@@ -424,6 +429,43 @@ function ActionIcon({
   );
 }
 
+// prompt 06: a minimal accessible On/Off switch for the inline per-row streaming toggle.
+function StreamSwitch({
+  on,
+  disabled,
+  onToggle,
+  label,
+}: {
+  on: boolean;
+  disabled?: boolean;
+  onToggle: (next: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={() => onToggle(!on)}
+      className={cn(
+        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+        "disabled:cursor-not-allowed disabled:opacity-40",
+        on ? "bg-success" : "bg-neutral-300",
+      )}
+    >
+      <span
+        className={cn(
+          "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+          on ? "translate-x-4" : "translate-x-0.5",
+        )}
+      />
+    </button>
+  );
+}
+
 function DetailGrid({ items }: { items: Array<[string, unknown]> }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -497,6 +539,62 @@ export default function MigrationJobsPage() {
   // prompt 05: streaming config is merged into Migration Jobs — a per-row ⚙ opens a drawer that
   // reuses StreamingEditor scoped to this job's table (no separate Streaming tab anymore).
   const [streamingJob, setStreamingJob] = useState<MigrationJob | null>(null);
+
+  // prompt 06: an inline On/Off switch per row. Reads cfg.enabled from GET /streaming/config (keyed by
+  // target_table to match the job), toggles via PUT /streaming/config/{source_view}. streaming.configure
+  // is granted to admin + data_engineer (DEFAULT_ROLE_PERMISSIONS) — gate the switch on the same parity;
+  // the backend still enforces the real 403, which rolls the optimistic switch back.
+  const { user } = useAuth();
+  const canConfigureStreaming = user?.role === "admin" || user?.role === "data_engineer";
+  const [streamCfgs, setStreamCfgs] = useState<Record<string, StreamingTable>>({});
+  const [streamAvail, setStreamAvail] = useState(true);
+  const [streamBusy, setStreamBusy] = useState<string | null>(null);
+
+  const loadStreamCfgs = useCallback(async () => {
+    try {
+      const r = await streamingConfigList();
+      setStreamCfgs(Object.fromEntries(r.tables.map((t) => [t.target_table, t])));
+      setStreamAvail(true);
+    } catch {
+      setStreamAvail(false); // backend without the streaming API -> switches show "-"
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadStreamCfgs();
+  }, [loadStreamCfgs]);
+
+  // A table "would full-reload" when it has no usable upsert key (no watermark, or a date marker with
+  // no PK). Enabling such a table copies the whole view every cycle (heavy) → warn before turning it on.
+  const wouldFullReload = (cfg: StreamingTable): boolean =>
+    cfg.mode === "full" || !(cfg.effective_upsert_key && cfg.effective_upsert_key.length > 0);
+
+  async function toggleStreaming(job: MigrationJob, next: boolean) {
+    const cfg = streamCfgs[job.target_table];
+    if (!cfg) return;
+    if (next && wouldFullReload(cfg)) {
+      const ok = window.confirm(
+        `${cfg.source_view} has no watermark / usable key yet - enabling streams a FULL reload of the ` +
+          `whole view every cycle (heavy, minimum 12h). Set a watermark or PK in the gear drawer for an ` +
+          `incremental sync. Enable anyway?`,
+      );
+      if (!ok) return;
+    }
+    const prev = cfg.enabled;
+    setStreamCfgs((m) => ({ ...m, [job.target_table]: { ...cfg, enabled: next } })); // optimistic
+    setStreamBusy(job.target_table);
+    setPageError(null);
+    try {
+      const updated = await streamingUpdateConfig(cfg.source_view, { enabled: next });
+      setStreamCfgs((m) => ({ ...m, [job.target_table]: updated }));
+      setNotice(`Streaming ${next ? "enabled" : "disabled"} for ${cfg.source_view}.`);
+    } catch (error) {
+      setStreamCfgs((m) => ({ ...m, [job.target_table]: { ...cfg, enabled: prev } })); // rollback
+      setPageError(`Streaming toggle failed for ${cfg.source_view}: ${errorMessage(error)}`);
+    } finally {
+      setStreamBusy(null);
+    }
+  }
 
   const [jobMode, setJobMode] = useState<JobMode | null>(null);
   const [jobForm, setJobForm] = useState<JobForm>(emptyJobForm);
@@ -1155,6 +1253,7 @@ export default function MigrationJobsPage() {
                 <col className="w-[95px]" />
                 <col className="w-[110px]" />
                 <col className="w-[110px]" />
+                <col className="w-[110px]" />
               </colgroup>
               <THead>
                 <TR>
@@ -1166,6 +1265,7 @@ export default function MigrationJobsPage() {
                   <TH>Tool</TH>
                   <TH>Load Mode</TH>
                   <TH>Status</TH>
+                  <TH>Streaming</TH>
                   <TH>Latest Run</TH>
                   <TH>Target Rows</TH>
                 </TR>
@@ -1208,6 +1308,33 @@ export default function MigrationJobsPage() {
                     <TD><Badge tone={badgeTone(job.migration_tool)}>{job.migration_tool}</Badge></TD>
                     <TD>{titleize(job.load_mode)}</TD>
                     <TD><Badge tone={badgeTone(job.status)}>{job.status}</Badge></TD>
+                    <TD>
+                      {(() => {
+                        const cfg = streamCfgs[job.target_table];
+                        if (!streamAvail || !cfg) {
+                          return <span className="text-neutral-300" title="No streaming config for this table">-</span>;
+                        }
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            <StreamSwitch
+                              on={cfg.enabled}
+                              disabled={!canConfigureStreaming || streamBusy === job.target_table}
+                              onToggle={(next) => void toggleStreaming(job, next)}
+                              label={
+                                canConfigureStreaming
+                                  ? `Toggle streaming for ${cfg.source_view}`
+                                  : `Streaming ${cfg.enabled ? "on" : "off"} (requires streaming.configure)`
+                              }
+                            />
+                            {cfg.enabled && wouldFullReload(cfg) && (
+                              <span title="No watermark/PK - full reload (heavy, min 12h)">
+                                <AlertTriangle size={13} className="text-warning" />
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </TD>
                     <TD><Badge tone={badgeTone(job.latest_run_status)}>{job.latest_run_status || "none"}</Badge></TD>
                     <TD>{job.latest_target_row_count ?? "-"}</TD>
                   </TR>
@@ -1388,10 +1515,10 @@ export default function MigrationJobsPage() {
           to this job's target_table. Replaces the removed top-level Streaming tab. */}
       <Modal
         open={streamingJob !== null}
-        onClose={() => setStreamingJob(null)}
+        onClose={() => { setStreamingJob(null); void loadStreamCfgs(); }}
         title={`Streaming - ${streamingJob?.source_table || streamingJob?.target_table || ""}`}
         className="data-model-dialog overflow-hidden"
-        footer={<Button variant="ghost" onClick={() => setStreamingJob(null)}>Close</Button>}
+        footer={<Button variant="ghost" onClick={() => { setStreamingJob(null); void loadStreamCfgs(); }}>Close</Button>}
       >
         <div className="max-w-full overflow-x-auto">
           {streamingJob && <StreamingEditor filterTarget={streamingJob.target_table} />}
