@@ -8,7 +8,6 @@ import {
   Cable,
   ArrowRightLeft,
   Workflow,
-  Radio,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -22,7 +21,8 @@ export type NavItem = {
 };
 
 /** Avenue MDP navigation. All pages are bound to the FastAPI backend.
- * IA (report 30): Streaming is its own tab; Users / Profile / Design System live INSIDE Settings
+ * IA (report 30 + prompt 05): Streaming is no longer its own tab — it is merged into Migration Jobs
+ * (a per-row ⚙ opens a streaming drawer). Users / Profile / Design System live INSIDE Settings
  * (as sub-tabs), so they are no longer top-level nav items. */
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", desc: "Platform overview", icon: LayoutDashboard },
@@ -32,8 +32,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/apis", label: "API Keys", desc: "External access keys", icon: Plug },
   { href: "/transactions", label: "Transactions", desc: "Ingest / outbound log", icon: Repeat },
   { href: "/connections", label: "Connections", desc: "External systems", icon: Cable },
-  { href: "/migration-jobs", label: "Migration Jobs", desc: "ora2pg + PK + Verify", icon: ArrowRightLeft },
-  { href: "/streaming", label: "Streaming", desc: "Watermark-incremental sync", icon: Radio },
+  { href: "/migration-jobs", label: "Migration Jobs", desc: "ora2pg + PK + Verify + Streaming", icon: ArrowRightLeft },
   { href: "/jde-demo", label: "JDE Demo Flow", desc: "Guided UAT", icon: Workflow },
   // Settings now contains Users · Profile · Design System (+ per-user tabs/theme). Visible to all;
   // admin-only sub-tabs (Users, Tabs & access) are gated inside + by require_admin on the backend.

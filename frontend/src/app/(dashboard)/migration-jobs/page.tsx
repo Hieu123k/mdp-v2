@@ -7,6 +7,7 @@ import {
   Pencil,
   PlayCircle,
   Power,
+  Radio,
   RotateCcw,
   ShieldCheck,
   SquarePen,
@@ -20,6 +21,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/Table";
 import { Ora2pgMigrationDashboard } from "@/components/Ora2pgMigrationDashboard";
+import { StreamingEditor } from "@/components/streaming/StreamingEditor";
 import {
   ApiError,
   apiPath,
@@ -491,6 +493,10 @@ export default function MigrationJobsPage() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // prompt 05: streaming config is merged into Migration Jobs — a per-row ⚙ opens a drawer that
+  // reuses StreamingEditor scoped to this job's table (no separate Streaming tab anymore).
+  const [streamingJob, setStreamingJob] = useState<MigrationJob | null>(null);
 
   const [jobMode, setJobMode] = useState<JobMode | null>(null);
   const [jobForm, setJobForm] = useState<JobForm>(emptyJobForm);
@@ -1181,6 +1187,9 @@ export default function MigrationJobsPage() {
                         <ActionIcon title={`Validate target for ${job.name}`} onClick={() => validateLatest(job)} disabled={busy}>
                           <ShieldCheck size={15} />
                         </ActionIcon>
+                        <ActionIcon title={`Streaming for ${job.name}`} onClick={() => setStreamingJob(job)} disabled={busy}>
+                          <Radio size={15} />
+                        </ActionIcon>
                         {job.status === "inactive" ? (
                           <ActionIcon title={`Activate ${job.name}`} onClick={() => activateJob(job)} disabled={busy}>
                             <RotateCcw size={15} />
@@ -1373,6 +1382,20 @@ export default function MigrationJobsPage() {
       >
         {modalError && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{modalError}</p>}
         {renderRunForm(runMode === "view")}
+      </Modal>
+
+      {/* prompt 05: per-table Streaming drawer — reuses StreamingEditor (backend unchanged), scoped
+          to this job's target_table. Replaces the removed top-level Streaming tab. */}
+      <Modal
+        open={streamingJob !== null}
+        onClose={() => setStreamingJob(null)}
+        title={`Streaming - ${streamingJob?.source_table || streamingJob?.target_table || ""}`}
+        className="data-model-dialog overflow-hidden"
+        footer={<Button variant="ghost" onClick={() => setStreamingJob(null)}>Close</Button>}
+      >
+        <div className="max-w-full overflow-x-auto">
+          {streamingJob && <StreamingEditor filterTarget={streamingJob.target_table} />}
+        </div>
       </Modal>
     </>
   );

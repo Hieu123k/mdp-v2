@@ -52,8 +52,12 @@ const draftFrom = (t: StreamingTable): StreamDraft => ({
 
 /** Streaming per-table editor (2-case, prompt 35): pick a watermark column (dropdown of the view's
  * columns) for incremental, or "(none) → full reload" (atomic swap, ≥12h). Edits are a local draft
- * until Apply. */
-export function StreamingEditor() {
+ * until Apply.
+ *
+ * `filterTarget` (prompt 05): when set, only the streaming row whose `target_table` matches is shown.
+ * This lets a Migration Jobs row open a drawer scoped to that one table while reusing the exact same
+ * component + endpoints (keyed by `source_view`). Unset = show all tables. */
+export function StreamingEditor({ filterTarget }: { filterTarget?: string } = {}) {
   const [streaming, setStreaming] = useState<StreamingTable[] | null>(null);
   const [avail, setAvail] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -232,9 +236,21 @@ export function StreamingEditor() {
         }
       />
       <CardBody>
-        {!avail ? (
-          <p className="text-sm text-neutral-500">Streaming API not available on this backend.</p>
-        ) : (
+        {(() => {
+          const rows = filterTarget
+            ? (streaming ?? []).filter((t) => t.target_table === filterTarget)
+            : (streaming ?? []);
+          if (!avail) {
+            return <p className="text-sm text-neutral-500">Streaming API not available on this backend.</p>;
+          }
+          if (filterTarget && (streaming ?? []).length > 0 && rows.length === 0) {
+            return (
+              <p className="text-sm text-neutral-500">
+                No streaming-managed table matches this migration job (streaming covers the JDE migratable tables only).
+              </p>
+            );
+          }
+          return (
           <>
             {msg ? <p className="mb-2 text-sm text-neutral-600 dark:text-neutral-300">{msg}</p> : null}
             <Table>
@@ -252,7 +268,7 @@ export function StreamingEditor() {
                 </TR>
               </THead>
               <TBody>
-                {(streaming ?? []).map((t) => {
+                {rows.map((t) => {
                   const d = draftOf(t);
                   const dirty = isDirty(t);
                   const pkCols = t.primary_key_columns ?? [];
@@ -452,7 +468,8 @@ export function StreamingEditor() {
               </TBody>
             </Table>
           </>
-        )}
+          );
+        })()}
       </CardBody>
     </Card>
   );

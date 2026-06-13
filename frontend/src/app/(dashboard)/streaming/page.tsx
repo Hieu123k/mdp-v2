@@ -1,16 +1,8 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { PageHeader } from "@/components/layout/PageHeader";
-import { StreamingEditor } from "@/components/streaming/StreamingEditor";
-
+// prompt 05: the Streaming tab was merged into Migration Jobs (per-row ⚙ → streaming drawer, reusing
+// StreamingEditor). This route now redirects so any old bookmark/link lands on the new home instead
+// of 404-ing. StreamingEditor itself lives on and renders inside the Migration Jobs drawer.
 export default function StreamingPage() {
-  return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Streaming"
-        subtitle="Watermark-incremental sync (Oracle change → upsert into Postgres). Enable a table to auto-migrate."
-      />
-      <StreamingEditor />
-    </div>
-  );
+  redirect("/migration-jobs");
 }
