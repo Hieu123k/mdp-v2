@@ -67,7 +67,7 @@
       "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal", "group": "A" }, "lineWidth": 1 }, "color": { "mode": "palette-classic" } }, "overrides": [] },
       "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "none" } },
       "targets": [
-        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "time_series", "rawQuery": true, "rawSql": "SELECT $__timeGroupAlias(created_at, '1h') AS time, status AS metric, count(*) AS value FROM transactions WHERE $__timeFilter(created_at) GROUP BY 1, status ORDER BY 1;" }
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "time_series", "rawQuery": true, "rawSql": "SELECT $__timeGroupAlias(created_at, '1h'), status AS metric, count(*) AS value FROM transactions WHERE $__timeFilter(created_at) GROUP BY 1, status ORDER BY 1;" }
       ]
     },
     {
@@ -79,7 +79,7 @@
       "fieldConfig": { "defaults": {}, "overrides": [] },
       "options": { "showHeader": true },
       "targets": [
-        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT schemaname || '.' || relname AS table, n_live_tup AS rows FROM pg_stat_user_tables WHERE schemaname = 'mdp_data' AND relname LIKE 'dm_%' ORDER BY n_live_tup DESC, table;" }
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT schemaname || '.' || relname AS table_name, n_live_tup AS row_count FROM pg_stat_user_tables WHERE schemaname = 'mdp_data' AND relname LIKE 'dm_%' ORDER BY n_live_tup DESC, relname;" }
       ]
     },
     {
