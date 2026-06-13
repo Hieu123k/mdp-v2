@@ -1,0 +1,101 @@
+# TIPA V2.0 — PROD `.63` compose: MDP ONLY (backend + frontend + Caddy edge on :8456).
+# Reuses the EXISTING prod Postgres (79 GB) via an EXTERNAL DATABASE_URL — it does NOT bundle or create
+# a Postgres volume — and wires Oracle `.16` + streaming for prod. NO grafana, NO simulator here (those
+# are separate stacks: docker-compose.prod63-grafana.yml / the simulation/ stack).
+#
+# This file is ADDITIVE — it does not touch docker-compose.v2.yml (the DEV `mdpv2` stack).
+#
+#   # cutover on .63 (see ops/DEPLOY_prod63.md — back up first!):
+#   cd ops && docker compose -f docker-compose.prod63.yml --env-file .env.prod63 up -d --build
+#   # recommended: replace v0.1.4 cleanly with  -p mdp  (so it takes over that project's containers)
+#
+# All secrets/hosts come from the env (.env.prod63 on the VM, chmod 600, git-ignored). Reuse the
+# v0.1.4 JWT_SECRET_KEY / CONNECTION_SECRET_KEY (changing them invalidates old API keys + logins).
+name: mdp_prod63
+
+services:
+  backend:
+    build:
+      context: ../backend
+    environment:
+      APP_ENV: production
+      # External prod Postgres — reuse the existing 79 GB DB. Host must be reachable from this
+      # container (a host-exposed address via host.docker.internal, or a service name on a joined
+      # network — see ops/DEPLOY_prod63.md). NEVER point this at a fresh/empty volume.
+      DATABASE_URL: ${DATABASE_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      CONNECTION_SECRET_KEY: ${CONNECTION_SECRET_KEY}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      # Oracle JDE `.16` (source for streaming + ora2pg). Empty on environments without Oracle.
+      ORACLE_HOST: ${ORACLE_HOST:-}
+      ORACLE_PORT: ${ORACLE_PORT:-1521}
+      ORACLE_SID: ${ORACLE_SID:-}
+      ORACLE_SERVICE_NAME: ${ORACLE_SERVICE_NAME:-}
+      ORACLE_USER: ${ORACLE_USER:-}
+      ORACLE_PWD: ${ORACLE_PWD:-}
+      ORACLE_SCHEMA: ${ORACLE_SCHEMA:-SYSTEM}
+      # ora2pg migration runs drive a container named ORA2PG_CONTAINER over the mounted docker socket
+      # (provide that container separately on prod; reuse v0.1.4's or run the project ora2pg image).
+      ORA2PG_CONTAINER: ${ORA2PG_CONTAINER:-ora2pg}
+      ORA2PG_SOURCE_COUNT_ENABLED: ${ORA2PG_SOURCE_COUNT_ENABLED:-false}
+      # Streaming master switch defaults ON for prod; per-table enable is the real control (the UI switch).
+      STREAMING_ENABLED: ${STREAMING_ENABLED:-true}
+      STREAMING_INTERVAL: ${STREAMING_INTERVAL:-60}
+    extra_hosts:
+      # lets DATABASE_URL / ORACLE_HOST target a host-exposed address (host.docker.internal) on Linux.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # ora2pg migration runs only (the backend execs ora2pg in ORA2PG_CONTAINER). Remove if ora2pg
+      # runs are not used on prod.
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        NEXT_PUBLIC_API_URL: ""
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://localhost:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  reverse-proxy:
+    image: caddy:2
+    ports:
+      - "${MDP_PORT:-8456}:8456"
+    volumes:
+      - ./Caddyfile.v2:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_started
+      frontend:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

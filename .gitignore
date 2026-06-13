@@ -1,10 +1,10 @@
 # --- Secrets / environment (NEVER commit real env) ---
 .env
 .env.*
-!.env.example
+!.env*.example
 ops/.env
 ops/.env.*
-!ops/.env.example
+!ops/.env*.example
 *.admin_pwd
 .admin_pwd
 

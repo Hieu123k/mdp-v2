@@ -1,0 +1,52 @@
+# TIPA V2.0 — PROD `.63` dedicated Grafana (separate stack, COEXISTS with the shared Grafana on :3000).
+# Reads MDP OUTBOUND (Infinity datasource → http://reverse-proxy:8456/api/outbound/{model}, X-API-Key)
+# and optionally the read-only Postgres role grafana_ro. Reuses the SAME provisioning/dashboards as the
+# DEV stack (../grafana). Real report dashboards are decided later; the sample dashboards ship for now.
+#
+# Separate project so it never collides with the MDP stack or the shared Grafana / Tier0-Edge / OpenRemote
+# / neuron / postgres_uns / umh-core / nodered:1880.
+#
+#   cd ops && docker compose -f docker-compose.prod63-grafana.yml --env-file .env.prod63 up -d
+#
+# It joins the MDP stack's network (MDP_NETWORK) so it can reach `reverse-proxy:8456` internally; set
+# MDP_NETWORK to the MDP prod stack's network (default `mdp_prod63_default`, or `mdp_default` if the MDP
+# stack was started with `-p mdp`). Host port GRAFANA_PORT (default 3001) AVOIDS the shared Grafana :3000.
+name: mdpv2-grafana
+
+services:
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: ${GRAFANA_CONTAINER:-mdpv2-grafana}
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-http://localhost:3001}
+      # Infinity datasource plugin (reads MDP outbound). grafana-cli does not parse id@version, so it is
+      # installed by id and resolves to v3.8.0 (then pinned in the volume).
+      GF_INSTALL_PLUGINS: yesoreyeram-infinity-datasource
+      # Read-only Postgres role for the P1 Postgres datasource (optional on prod).
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_ro}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-}
+      # Outbound-scoped MDP API key for the Infinity datasource (provisioning/datasources/infinity.yml).
+      GRAFANA_MDP_API_KEY: ${GRAFANA_MDP_API_KEY:-}
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - default
+      - mdpnet
+    restart: unless-stopped
+
+networks:
+  mdpnet:
+    # the MDP prod stack's network (external) so Infinity can reach reverse-proxy:8456 by name.
+    external: true
+    name: ${MDP_NETWORK:-mdp_prod63_default}
+
+volumes:
+  grafana_data:
+    name: ${GRAFANA_VOLUME:-mdpv2_grafana_data}
