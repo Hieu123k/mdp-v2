@@ -1,0 +1,16 @@
+# Grafana dashboard provider — loads dashboards-as-code from grafana/dashboards/*.json
+# (mounted read-only at /var/lib/grafana/dashboards). Committed dashboards are the source of truth;
+# UI edits are disabled so the JSON in git stays authoritative.
+apiVersion: 1
+
+providers:
+  - name: MDP dashboards
+    orgId: 1
+    folder: MDP
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

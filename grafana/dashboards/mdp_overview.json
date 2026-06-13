@@ -1,0 +1,98 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 0,
+  "schemaVersion": 39,
+  "tags": ["mdp", "v2"],
+  "time": { "from": "now-7d", "to": "now" },
+  "timezone": "browser",
+  "title": "MDP Overview",
+  "uid": "mdp_overview",
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Transactions (all-time)",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT count(*) AS value FROM transactions;" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Failed (all-time)",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT count(*) AS value FROM transactions WHERE status = 'failed';" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Active data models",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT count(*) AS value FROM data_models WHERE status = 'active';" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Success (all-time)",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT count(*) AS value FROM transactions WHERE status = 'success';" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Transactions per hour by status",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 4 },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal", "group": "A" }, "lineWidth": 1 }, "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "none" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "time_series", "rawQuery": true, "rawSql": "SELECT $__timeGroupAlias(created_at, '1h') AS time, status AS metric, count(*) AS value FROM transactions WHERE $__timeFilter(created_at) GROUP BY 1, status ORDER BY 1;" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Rows per mdp_data.dm_* table (Type A inbound)",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 13 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT schemaname || '.' || relname AS table, n_live_tup AS rows FROM pg_stat_user_tables WHERE schemaname = 'mdp_data' AND relname LIKE 'dm_%' ORDER BY n_live_tup DESC, table;" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Recent transactions",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 13 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT created_at, direction, status, endpoint, source_system FROM transactions ORDER BY created_at DESC LIMIT 50;" }
+      ]
+    }
+  ]
+}

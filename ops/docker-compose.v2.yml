@@ -1,19 +1,21 @@
-# TIPA V2.0 — P0 scaffold compose: MDP only (backend + frontend + postgres + Caddy edge).
-# Runs the v0.1.5 MDP app byte-identical to V1.x, but with V2-isolated names/volumes/port so it
-# COEXISTS with the running V1 `mdp2` stack on tipa-vm. Flink + Grafana are NOT added yet (P1/P2).
+# TIPA V2.0 compose: MDP (backend + frontend + postgres + Caddy edge) + Grafana reporting.
+# Runs the v0.1.5 MDP app byte-identical to V1.x, plus a DEDICATED Grafana container (P1) that
+# reads MDP's Postgres for reporting. V2-isolated names/volumes/ports so it COEXISTS with the
+# running V1 `mdp2` stack and the shared VPS services on tipa-vm.
 #
 #   cd ops && docker compose -f docker-compose.v2.yml --env-file .env up -d --build
 #
 # Coexistence (nothing here collides with the live V1 stack or the shared VPS services):
 #   - project name `mdpv2`  -> containers `mdpv2-*`, network `mdpv2_default`,
-#     volumes `mdpv2_postgres_data` / `mdpv2_caddy_data` / `mdpv2_caddy_config`
-#     (distinct from V1's `mdp2_*` / `mdp_*`).
-#   - host port MDP_V2_PORT (default 8457) -> Caddy :8456  (V1 mdp2 keeps host :8456).
-#   - postgres is NOT published to the host (reached only inside `mdpv2_default`).
+#     volumes `mdpv2_postgres_data` / `mdpv2_caddy_data` / `mdpv2_caddy_config` /
+#     `mdpv2_grafana_data` (distinct from V1's `mdp2_*` / `mdp_*`).
+#   - host ports: MDP_V2_PORT (default 8457) -> Caddy :8456; GRAFANA_PORT (default 3001) -> :3000.
+#     (V1 mdp2 keeps host :8456; this Grafana is V2-only and unrelated to any shared Grafana.)
+#   - postgres is NOT published to the host (reached only inside `mdpv2_default`); Grafana reads it
+#     over the internal network as a least-privilege read-only role `grafana_ro`.
 #
-# ora2pg is intentionally omitted in P0: it is the Oracle->Postgres migration path that Flink
-# replaces in V2 (see docs/TIPA_V2.0_Plan.md, decision H1). The MDP backend starts and runs fine
-# without it — the migration dashboard degrades gracefully when Oracle is unreachable (config.py).
+# ora2pg / Flink are intentionally absent: admin decided V2 = MDP as-is + Grafana reporting (no CDC).
+# The MDP backend starts and runs fine without ora2pg (graceful degradation in config.py).
 name: mdpv2
 
 services:
@@ -96,7 +98,32 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  # --- P1: dedicated Grafana for MDP reporting (reads Postgres via the internal network) ---
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: mdpv2-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-http://localhost:3001}
+      # Read-only Postgres role used by the provisioned datasource (interpolated into
+      # provisioning/datasources/postgres.yml). Never the MDP app user.
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_ro}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD}
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  grafana_data:

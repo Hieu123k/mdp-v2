@@ -1,0 +1,23 @@
+# Grafana datasource provisioning (dashboards-as-code) — TIPA V2.0 / MDP reporting.
+# Connects to MDP's Postgres over the internal compose network as a LEAST-PRIVILEGE read-only role.
+# user/password are interpolated from the Grafana container env ($GRAFANA_DB_USER / $GRAFANA_DB_PASSWORD,
+# fed from ops/.env). No secret is stored in this file. The role `grafana_ro` (SELECT-only) is created
+# by ops/init/grafana_ro.sh. sslmode=disable is safe here: traffic stays on the private mdpv2 network.
+apiVersion: 1
+
+datasources:
+  - name: MDP Postgres
+    uid: mdp_postgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: mdp
+    user: $GRAFANA_DB_USER
+    isDefault: true
+    editable: false
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: false
+    secureJsonData:
+      password: $GRAFANA_DB_PASSWORD
