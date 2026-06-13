@@ -1,0 +1,22 @@
+# TIPA V2.0 DEV stack `mdpv2` reverse proxy — plain HTTP on :8456 inside the container.
+# The host port is mapped in docker-compose.v2.yml (default 8457) so V2 coexists with the
+# V1 `mdp2` stack already serving :8456 on tipa-vm. Routing is identical to V1.x:
+#   /api/*        -> backend:8000 (prefix stripped)
+#   /docs*, /openapi.json -> backend:8000
+#   everything else       -> frontend:3000 (Next.js, same-origin /api)
+:8456 {
+	encode gzip
+
+	handle_path /api/* {
+		reverse_proxy backend:8000
+	}
+	handle /docs* {
+		reverse_proxy backend:8000
+	}
+	handle /openapi.json {
+		reverse_proxy backend:8000
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

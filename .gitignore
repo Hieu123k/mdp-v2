@@ -1,0 +1,48 @@
+# --- Secrets / environment (NEVER commit real env) ---
+.env
+.env.*
+!.env.example
+ops/.env
+ops/.env.*
+!ops/.env.example
+*.admin_pwd
+.admin_pwd
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+dist/
+out/
+npm-debug.log*
+
+# --- Docker / local data & volumes ---
+*.log
+.tmp/
+data/
+volumes/
+backups/*.dump
+backups/*.sql
+backups/*.gz
+
+# --- Flink / Grafana runtime state (configs-as-code are committed; runtime is not) ---
+flink/checkpoints/
+flink/savepoints/
+grafana/data/
+
+# --- Handoff protocol (kept outside the code repo) ---
+handoff/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
