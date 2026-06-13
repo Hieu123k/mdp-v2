@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Download,
   Eye,
   History,
-  Pencil,
+  ListChecks,
   PlayCircle,
   Power,
-  Radio,
   RotateCcw,
+  Settings2,
   ShieldCheck,
   SquarePen,
 } from "lucide-react";
@@ -49,13 +53,21 @@ import {
   validateMigrationTarget,
   streamingConfigList,
   streamingUpdateConfig,
+  ora2pgListTables,
+  ora2pgVerify,
+  ora2pgDownloadReconciliation,
+  verifyBatch,
+  verifyBatchStatus,
   type MigrationJob,
   type MigrationRun,
   type MigrationTemplate,
   type StreamingTable,
+  type Ora2pgTable,
+  type VerifyBatchTable,
   type TargetValidationResult,
 } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { Tabs } from "@/components/ui/Tabs";
 import { cn } from "@/lib/utils";
 
 const RUN_TYPES = ["full_load", "incremental", "validation_only", "external_bulk"];
@@ -144,6 +156,28 @@ function badgeTone(value?: string | null): BadgeTone {
 
 function titleize(value?: string | null): string {
   return value ? value.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) : "-";
+}
+
+// prompt 08: verify-verdict helpers (kept consistent with the old ora2pg dashboard colours).
+function verdictTone(v?: string | null): BadgeTone {
+  if (v === "MATCH") return "success";
+  if (v === "MISMATCH") return "danger";
+  if (v === "ESTIMATE") return "warning"; // estimate is not a (red) mismatch
+  return "neutral"; // PENDING / unknown
+}
+function verdictLabel(v?: string | null): string {
+  if (v === "ESTIMATE") return "~ estimate";
+  if (v === "PENDING") return "Awaiting Verify";
+  return v || "-";
+}
+function batchQueueTone(s?: string): BadgeTone {
+  if (s === "done") return "success";
+  if (s === "error") return "danger";
+  if (s === "running") return "info";
+  return "neutral";
+}
+function fmtIntCell(n: number | null | undefined): string {
+  return n === null || n === undefined ? "-" : n.toLocaleString("en-US");
 }
 
 function cellText(value: unknown): string {
@@ -387,11 +421,6 @@ function runFormFromRun(run: MigrationRun): RunForm {
   };
 }
 
-function sourceLabel(job: MigrationJob): string {
-  if (job.source_schema && job.source_table) return `${job.source_schema}.${job.source_table}`;
-  return job.source_table || job.source_schema || "-";
-}
-
 function targetLabel(job: MigrationJob): string {
   return `${job.target_schema}.${job.target_table}`;
 }
@@ -463,6 +492,41 @@ function StreamSwitch({
         )}
       />
     </button>
+  );
+}
+
+// prompt 08: a clickable, sort-aware table header (arrow shows the active sort direction).
+function SortableTH({
+  label,
+  k,
+  active,
+  dir,
+  onSort,
+  className,
+}: {
+  label: string;
+  k: string;
+  active: boolean;
+  dir: "asc" | "desc";
+  onSort: (k: string) => void;
+  className?: string;
+}) {
+  return (
+    <TH className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className="inline-flex items-center gap-1 hover:text-brand"
+        title={`Sort by ${label}`}
+      >
+        {label}
+        {active ? (
+          dir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+        ) : (
+          <ChevronUp size={12} className="opacity-20" />
+        )}
+      </button>
+    </TH>
   );
 }
 
@@ -593,6 +657,161 @@ export default function MigrationJobsPage() {
       setPageError(`Streaming toggle failed for ${cfg.source_view}: ${errorMessage(error)}`);
     } finally {
       setStreamBusy(null);
+    }
+  }
+
+  // prompt 08: unified per-table table = ora2pg (verify/counts/PK) + job config + streaming, merged by
+  // target_table. Load the ora2pg list for the verdict/counts + cross-table Verify (single + batch).
+  const [oraTables, setOraTables] = useState<Ora2pgTable[]>([]);
+  const loadOra = useCallback(async () => {
+    try {
+      setOraTables((await ora2pgListTables()).tables);
+    } catch {
+      setOraTables([]); // ora2pg API absent -> verify columns degrade to "-"
+    }
+  }, []);
+  useEffect(() => {
+    void loadOra();
+  }, [loadOra]);
+  const oraByTarget = useMemo(
+    () => Object.fromEntries(oraTables.map((t) => [t.target_table, t])) as Record<string, Ora2pgTable>,
+    [oraTables],
+  );
+
+  const [verifying, setVerifying] = useState<string | null>(null);
+  const [verifySel, setVerifySel] = useState<Set<string>>(new Set()); // keyed by ora.table
+  const [batchStatus, setBatchStatus] = useState<Record<string, VerifyBatchTable>>({});
+  const [batchRunning, setBatchRunning] = useState(false);
+  const batchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopBatchPoll = useCallback(() => {
+    if (batchPollRef.current) {
+      clearInterval(batchPollRef.current);
+      batchPollRef.current = null;
+    }
+  }, []);
+  useEffect(() => () => stopBatchPoll(), [stopBatchPoll]);
+
+  const verifyOne = useCallback(
+    async (table: string) => {
+      setVerifying(table);
+      setPageError(null);
+      try {
+        await ora2pgVerify(table);
+        await loadOra();
+      } catch (error) {
+        setPageError(errorMessage(error));
+      } finally {
+        setVerifying(null);
+      }
+    },
+    [loadOra],
+  );
+
+  const verifySelected = useCallback(async () => {
+    const sel = Array.from(verifySel);
+    if (sel.length === 0) return;
+    setPageError(null);
+    setBatchRunning(true);
+    setBatchStatus(Object.fromEntries(sel.map((t) => [t, { status: "queued" as const }])));
+    try {
+      const { batch_id } = await verifyBatch(sel);
+      stopBatchPoll();
+      let failures = 0;
+      batchPollRef.current = setInterval(async () => {
+        try {
+          const st = await verifyBatchStatus(batch_id);
+          failures = 0;
+          setBatchStatus(st.tables);
+          if (st.finished) {
+            stopBatchPoll();
+            setBatchRunning(false);
+            await loadOra();
+          }
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 404) {
+            stopBatchPoll();
+            setBatchRunning(false);
+            setPageError("Verify batch is no longer available (server restarted?). Re-run if needed.");
+            return;
+          }
+          if (++failures >= 10) {
+            stopBatchPoll();
+            setBatchRunning(false);
+            setPageError("Lost contact with the verify batch - please retry.");
+          }
+        }
+      }, 1000);
+    } catch (error) {
+      setPageError(errorMessage(error));
+      setBatchRunning(false);
+    }
+  }, [verifySel, loadOra, stopBatchPoll]);
+
+  const allOraTables = jobs.map((j) => oraByTarget[j.target_table]?.table).filter(Boolean) as string[];
+  const toggleVerifySel = (table: string) =>
+    setVerifySel((cur) => {
+      const n = new Set(cur);
+      if (n.has(table)) n.delete(table);
+      else n.add(table);
+      return n;
+    });
+  const toggleSelectAll = () =>
+    setVerifySel((cur) =>
+      cur.size >= allOraTables.length && allOraTables.length > 0 ? new Set() : new Set(allOraTables),
+    );
+
+  // Sort (client-side over the loaded jobs).
+  type SortKey = "name" | "watermark" | "load_mode" | "status" | "latest_run" | "rows";
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(k);
+      setSortDir("asc");
+    }
+  };
+  const sortedJobs = useMemo(() => {
+    if (!sortKey) return jobs;
+    const v = (j: MigrationJob): string | number => {
+      const o = oraByTarget[j.target_table];
+      switch (sortKey) {
+        case "name":
+          return (j.name || "").toLowerCase();
+        case "watermark":
+          return (j.watermark_column || "").toLowerCase();
+        case "load_mode":
+          return j.load_mode || "";
+        case "status":
+          return o?.source_verdict || j.status || "";
+        case "latest_run":
+          return j.last_run_at || o?.last_run_at || "";
+        case "rows":
+          return j.latest_target_row_count ?? o?.current_rows ?? -1;
+        default:
+          return "";
+      }
+    };
+    return [...jobs].sort((a, b) => {
+      const va = v(a);
+      const vb = v(b);
+      const c = va < vb ? -1 : va > vb ? 1 : 0;
+      return sortDir === "asc" ? c : -c;
+    });
+  }, [jobs, sortKey, sortDir, oraByTarget]);
+
+  // ⚙ drawer: tabbed (Config / Migration / Streaming). Opening loads the job into the edit form.
+  const [drawerTab, setDrawerTab] = useState<string>("config");
+  async function openDrawer(job: MigrationJob) {
+    setDrawerTab("config");
+    setStreamingJob(job);
+    try {
+      const detail = await getMigrationJob(job.id);
+      setEditingJobId(detail.id);
+      setJobForm(jobFormFromJob(detail));
+    } catch {
+      setEditingJobId(job.id);
+      setJobForm(jobFormFromJob(job));
     }
   }
 
@@ -803,6 +1022,25 @@ export default function MigrationJobsPage() {
       setJobMode(null);
       setEditingJobId(null);
       await reloadJobs();
+    } catch (error) {
+      setModalError(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // prompt 08: save the job edited inside the ⚙ drawer Config tab (keeps the drawer open + refreshes it).
+  async function saveDrawerJob() {
+    if (!editingJobId) return;
+    setBusy(true);
+    setModalError(null);
+    try {
+      await updateMigrationJob(editingJobId, jobPayload());
+      setNotice("Migration job updated.");
+      await reloadJobs();
+      const detail = await getMigrationJob(editingJobId);
+      setJobForm(jobFormFromJob(detail));
+      setStreamingJob(detail);
     } catch (error) {
       setModalError(errorMessage(error));
     } finally {
@@ -1225,120 +1463,180 @@ export default function MigrationJobsPage() {
         title="Migration Jobs"
         subtitle={`Public API: ${apiPath("/migration-jobs")} - tracks external ora2pg/bulk loads and validates PostgreSQL staging targets.`}
       />
-      <Ora2pgMigrationDashboard />
+      {/* prompt 08: ONE unified per-table table (was: ora2pg dashboard card + a separate jobs table).
+          Each row = a table/job; the gear opens a tabbed drawer (Config / Migration / Streaming). */}
       <Card className="mb-4">
         <CardBody>
           <p className="text-sm text-neutral-600">
-            MDP does not run large JDE full loads inside FastAPI. Use ora2pg or another external bulk loader for large tables, then record the run and validate the target table here.
+            One row per table: ora2pg migration, Verify, watermark and streaming. Open the gear for the full
+            config (job + PK), the ora2pg run / reconciliation, and the streaming editor. MDP does not run large
+            JDE full loads inside FastAPI - ora2pg (or an external bulk loader) does, then you record + validate here.
           </p>
         </CardBody>
       </Card>
       {pageError && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{pageError}</p>}
       {notice && <p className="mb-4 rounded-md bg-success/10 px-3 py-2 text-sm text-success">{notice}</p>}
       <Card>
-        <CardHeader title="Migration Jobs" subtitle={`${jobs.length} total`} />
+        <CardHeader
+          title="Migration Jobs"
+          subtitle={`${jobs.length} total`}
+          action={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void verifySelected()}
+                disabled={batchRunning || verifySel.size === 0}
+                title="Verify the ticked tables - runs in the background, one at a time"
+              >
+                <ListChecks size={14} />{" "}
+                {batchRunning ? "Verifying..." : `Verify selected${verifySel.size ? ` (${verifySel.size})` : ""}`}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => void ora2pgDownloadReconciliation("csv").catch((e) => setPageError(errorMessage(e)))}>
+                <Download size={14} /> Log .csv
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => void ora2pgDownloadReconciliation("json").catch((e) => setPageError(errorMessage(e)))}>
+                <Download size={14} /> Log .json
+              </Button>
+            </div>
+          }
+        />
         <CardBody>
           {loading ? (
             <p className="text-sm text-neutral-400">Loading...</p>
           ) : (
             <Table className="table-fixed text-[13px]">
               <colgroup>
-                <col className="w-[180px]" />
-                <col className="w-[210px]" />
-                <col className="w-[140px]" />
-                <col className="w-[180px]" />
-                <col className="w-[180px]" />
+                <col className="w-[36px]" />
+                <col className="w-[90px]" />
+                <col className="w-[170px]" />
+                <col className="w-[170px]" />
+                <col className="w-[150px]" />
+                <col className="w-[150px]" />
+                <col className="w-[105px]" />
+                <col className="w-[150px]" />
                 <col className="w-[95px]" />
-                <col className="w-[120px]" />
-                <col className="w-[95px]" />
-                <col className="w-[110px]" />
-                <col className="w-[110px]" />
-                <col className="w-[110px]" />
+                <col className="w-[105px]" />
+                <col className="w-[90px]" />
               </colgroup>
               <THead>
                 <TR>
+                  <TH>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all"
+                      checked={allOraTables.length > 0 && verifySel.size >= allOraTables.length}
+                      ref={(el) => { if (el) el.indeterminate = verifySel.size > 0 && verifySel.size < allOraTables.length; }}
+                      onChange={toggleSelectAll}
+                    />
+                  </TH>
                   <TH className="text-center">Actions</TH>
-                  <TH>Name</TH>
-                  <TH>Source System</TH>
-                  <TH>Source Table</TH>
+                  <SortableTH label="Name" k="name" active={sortKey === "name"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
+                  <TH>Source</TH>
                   <TH>Target Table</TH>
-                  <TH>Tool</TH>
-                  <TH>Load Mode</TH>
-                  <TH>Status</TH>
+                  <SortableTH label="Watermark" k="watermark" active={sortKey === "watermark"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
+                  <SortableTH label="Load Mode" k="load_mode" active={sortKey === "load_mode"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
+                  <SortableTH label="Status / Verify" k="status" active={sortKey === "status"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
                   <TH>Streaming</TH>
-                  <TH>Latest Run</TH>
-                  <TH>Target Rows</TH>
+                  <SortableTH label="Latest Run" k="latest_run" active={sortKey === "latest_run"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
+                  <SortableTH label="Rows" k="rows" active={sortKey === "rows"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
                 </TR>
               </THead>
               <TBody>
-                {jobs.map((job) => (
-                  <TR key={job.id}>
-                    <TD>
-                      <div className="flex items-center justify-center gap-1">
-                        <ActionIcon title={`View ${job.name}`} onClick={() => openViewJob(job)} disabled={busy}>
-                          <Eye size={15} />
-                        </ActionIcon>
-                        <ActionIcon title={`Edit ${job.name}`} onClick={() => openEditJob(job)} disabled={busy}>
-                          <Pencil size={15} />
-                        </ActionIcon>
-                        <ActionIcon title={`Runs for ${job.name}`} onClick={() => openRuns(job)} disabled={busy}>
-                          <History size={15} />
-                        </ActionIcon>
-                        <ActionIcon title={`Validate target for ${job.name}`} onClick={() => validateLatest(job)} disabled={busy}>
-                          <ShieldCheck size={15} />
-                        </ActionIcon>
-                        <ActionIcon title={`Streaming for ${job.name}`} onClick={() => setStreamingJob(job)} disabled={busy}>
-                          <Radio size={15} />
-                        </ActionIcon>
-                        {job.status === "inactive" ? (
-                          <ActionIcon title={`Activate ${job.name}`} onClick={() => activateJob(job)} disabled={busy}>
-                            <RotateCcw size={15} />
+                {sortedJobs.map((job) => {
+                  const ora = oraByTarget[job.target_table];
+                  const cfg = streamCfgs[job.target_table];
+                  return (
+                    <TR key={job.id}>
+                      <TD>
+                        {ora ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${ora.table}`}
+                            checked={verifySel.has(ora.table)}
+                            onChange={() => toggleVerifySel(ora.table)}
+                          />
+                        ) : null}
+                      </TD>
+                      <TD>
+                        <div className="flex items-center justify-center gap-1">
+                          <ActionIcon title={`Open ${job.name}`} onClick={() => void openDrawer(job)} disabled={busy}>
+                            <Settings2 size={15} />
                           </ActionIcon>
+                          <ActionIcon
+                            title={`Verify ${ora?.table ?? job.target_table}`}
+                            onClick={() => ora && void verifyOne(ora.table)}
+                            disabled={!ora || verifying === ora?.table}
+                          >
+                            <CheckCircle2 size={15} />
+                          </ActionIcon>
+                        </div>
+                      </TD>
+                      <TD className="truncate font-medium" title={job.name}>{job.name}</TD>
+                      <TD className="truncate text-xs" title={`${job.source_system || job.source_type} - ${job.source_table || "-"}`}>
+                        <span className="text-neutral-600">{job.source_system || job.source_type}</span>
+                        {job.source_table ? <span className="ml-1 font-mono text-neutral-400">{job.source_table}</span> : null}
+                      </TD>
+                      <TD className="truncate font-mono text-xs" title={targetLabel(job)}>{targetLabel(job)}</TD>
+                      <TD>
+                        {job.watermark_column ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="font-mono text-xs text-neutral-700">{job.watermark_column}</span>
+                            {job.watermark_column_type && job.watermark_column_type !== "unknown" ? (
+                              <Badge tone="neutral">{job.watermark_column_type}</Badge>
+                            ) : null}
+                          </span>
                         ) : (
-                          <ActionIcon title={`Deactivate ${job.name}`} onClick={() => deactivateJob(job)} disabled={busy} danger>
-                            <Power size={15} />
-                          </ActionIcon>
+                          <span className="text-neutral-400" title="No watermark - incremental needs one; otherwise full-reload">
+                            - full-reload
+                          </span>
                         )}
-                      </div>
-                    </TD>
-                    <TD className="truncate font-medium" title={job.name}>{job.name}</TD>
-                    <TD className="truncate" title={job.source_system || job.source_type}>{job.source_system || job.source_type}</TD>
-                    <TD className="truncate font-mono text-xs" title={sourceLabel(job)}>{sourceLabel(job)}</TD>
-                    <TD className="truncate font-mono text-xs" title={targetLabel(job)}>{targetLabel(job)}</TD>
-                    <TD><Badge tone={badgeTone(job.migration_tool)}>{job.migration_tool}</Badge></TD>
-                    <TD>{titleize(job.load_mode)}</TD>
-                    <TD><Badge tone={badgeTone(job.status)}>{job.status}</Badge></TD>
-                    <TD>
-                      {(() => {
-                        const cfg = streamCfgs[job.target_table];
-                        if (!streamAvail || !cfg) {
-                          return <span className="text-neutral-300" title="No streaming config for this table">-</span>;
-                        }
-                        return (
-                          <div className="flex items-center gap-1.5">
-                            <StreamSwitch
-                              on={cfg.enabled}
-                              disabled={!canConfigureStreaming || streamBusy === job.target_table}
-                              onToggle={(next) => void toggleStreaming(job, next)}
-                              label={
-                                canConfigureStreaming
-                                  ? `Toggle streaming for ${cfg.source_view}`
-                                  : `Streaming ${cfg.enabled ? "on" : "off"} (requires streaming.configure)`
-                              }
-                            />
-                            {cfg.enabled && wouldFullReload(cfg) && (
-                              <span title="No watermark/PK - full reload (heavy, min 12h)">
-                                <AlertTriangle size={13} className="text-warning" />
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </TD>
-                    <TD><Badge tone={badgeTone(job.latest_run_status)}>{job.latest_run_status || "none"}</Badge></TD>
-                    <TD>{job.latest_target_row_count ?? "-"}</TD>
-                  </TR>
-                ))}
+                      </TD>
+                      <TD>{titleize(job.load_mode)}</TD>
+                      <TD>
+                        <div className="flex flex-col items-start gap-1">
+                          <Badge tone={badgeTone(job.status)}>{job.status}</Badge>
+                          {ora?.source_verdict ? <Badge tone={verdictTone(ora.source_verdict)}>{verdictLabel(ora.source_verdict)}</Badge> : null}
+                          {ora && batchStatus[ora.table] ? <Badge tone={batchQueueTone(batchStatus[ora.table].status)}>{batchStatus[ora.table].status}</Badge> : null}
+                        </div>
+                      </TD>
+                      <TD>
+                        {(() => {
+                          if (!streamAvail || !cfg) {
+                            return <span className="text-neutral-300" title="No streaming config for this table">-</span>;
+                          }
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <StreamSwitch
+                                on={cfg.enabled}
+                                disabled={!canConfigureStreaming || streamBusy === job.target_table}
+                                onToggle={(next) => void toggleStreaming(job, next)}
+                                label={
+                                  canConfigureStreaming
+                                    ? `Toggle streaming for ${cfg.source_view}`
+                                    : `Streaming ${cfg.enabled ? "on" : "off"} (requires streaming.configure)`
+                                }
+                              />
+                              {cfg.enabled && wouldFullReload(cfg) && (
+                                <span title="No watermark/PK - full reload (heavy, min 12h)">
+                                  <AlertTriangle size={13} className="text-warning" />
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </TD>
+                      <TD>
+                        <Badge tone={badgeTone(job.latest_run_status || ora?.last_run_status)}>
+                          {job.latest_run_status || ora?.last_run_status || "none"}
+                        </Badge>
+                      </TD>
+                      <TD className="font-mono text-xs">
+                        {job.latest_target_row_count != null ? fmtIntCell(job.latest_target_row_count) : fmtIntCell(ora?.current_rows)}
+                      </TD>
+                    </TR>
+                  );
+                })}
               </TBody>
             </Table>
           )}
@@ -1513,16 +1811,69 @@ export default function MigrationJobsPage() {
 
       {/* prompt 05: per-table Streaming drawer — reuses StreamingEditor (backend unchanged), scoped
           to this job's target_table. Replaces the removed top-level Streaming tab. */}
+      {/* prompt 08: per-table ⚙ drawer with 3 tabs — Config (job + PK), Migration (ora2pg run/Verify/
+          recon), Streaming (StreamingEditor). Closing reloads jobs/ora2pg/streaming so the row reflects it. */}
       <Modal
         open={streamingJob !== null}
-        onClose={() => { setStreamingJob(null); void loadStreamCfgs(); }}
-        title={`Streaming - ${streamingJob?.source_table || streamingJob?.target_table || ""}`}
+        onClose={() => { setStreamingJob(null); void loadStreamCfgs(); void loadOra(); void reloadJobs(); }}
+        title={streamingJob ? `${streamingJob.name} - ${streamingJob.target_table}` : ""}
         className="data-model-dialog overflow-hidden"
-        footer={<Button variant="ghost" onClick={() => { setStreamingJob(null); void loadStreamCfgs(); }}>Close</Button>}
+        footer={<Button variant="ghost" onClick={() => { setStreamingJob(null); void loadStreamCfgs(); void loadOra(); void reloadJobs(); }}>Close</Button>}
       >
-        <div className="max-w-full overflow-x-auto">
-          {streamingJob && <StreamingEditor filterTarget={streamingJob.target_table} />}
-        </div>
+        {streamingJob && (
+          <div className="space-y-3">
+            <Tabs
+              tabs={[
+                { key: "config", label: "Config" },
+                { key: "migration", label: "Migration" },
+                { key: "streaming", label: "Streaming" },
+              ]}
+              active={drawerTab}
+              onChange={setDrawerTab}
+            />
+            {modalError && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{modalError}</p>}
+            {drawerTab === "config" && (
+              <div className="space-y-3">
+                {renderJobForm(false)}
+                <div className="flex items-center justify-end gap-2">
+                  {streamingJob.status === "inactive" ? (
+                    <Button variant="secondary" onClick={() => activateJob(streamingJob)} disabled={busy}>
+                      <RotateCcw size={15} /> Activate
+                    </Button>
+                  ) : (
+                    <Button variant="ghost" onClick={() => deactivateJob(streamingJob)} disabled={busy} className="text-danger">
+                      <Power size={15} /> Deactivate
+                    </Button>
+                  )}
+                  <Button onClick={saveDrawerJob} disabled={busy}>{busy ? "Saving..." : "Save changes"}</Button>
+                </div>
+              </div>
+            )}
+            {drawerTab === "migration" && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => openViewJob(streamingJob)} disabled={busy}>
+                    <Eye size={14} /> View details
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => openRuns(streamingJob)} disabled={busy}>
+                    <History size={14} /> Run history
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => validateLatest(streamingJob)} disabled={busy}>
+                    <ShieldCheck size={14} /> Validate target
+                  </Button>
+                </div>
+                <div className="max-w-full overflow-x-auto">
+                  <Ora2pgMigrationDashboard filterTable={oraByTarget[streamingJob.target_table]?.table} />
+                </div>
+              </div>
+            )}
+            {drawerTab === "streaming" && (
+              <div className="max-w-full overflow-x-auto">
+                <StreamingEditor filterTarget={streamingJob.target_table} />
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </>
   );

@@ -98,7 +98,11 @@ function fmtClock(iso?: string | null): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-export function Ora2pgMigrationDashboard() {
+// prompt 08: `filterTable` embeds this dashboard in the Migration Jobs ⚙ drawer scoped to ONE table —
+// the per-table run/record/Verify/repair/reconciliation/progress is kept; the cross-table multi-select
+// + "Verify selected" + log-download move to the unified outer table.
+export function Ora2pgMigrationDashboard({ filterTable }: { filterTable?: string } = {}) {
+  const embedded = !!filterTable;
   const [info, setInfo] = useState<Ora2pgInfo | null>(null);
   const [tables, setTables] = useState<Ora2pgTable[]>([]);
   const [selected, setSelected] = useState<string>("");
@@ -124,11 +128,11 @@ export function Ora2pgMigrationDashboard() {
     try {
       const r = await ora2pgListTables();
       setTables(r.tables);
-      setSelected((cur) => cur || (r.tables[0]?.table ?? ""));
+      setSelected((cur) => filterTable ?? (cur || (r.tables[0]?.table ?? "")));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Failed to load tables");
     }
-  }, []);
+  }, [filterTable]);
 
   // Primary Key here is READ-ONLY (prompt 36): the column shows the PK + its source badge so an
   // operator can see the upsert key at a glance, but ALL editing (set / scan / clear) lives in the
@@ -369,6 +373,12 @@ export function Ora2pgMigrationDashboard() {
     return order.map((mod) => ({ module: mod, items: byModule.get(mod)! }));
   }, [tables]);
 
+  // When embedded in the ⚙ drawer, scope the row list + the source-table picker to the one table.
+  const shownTables = embedded ? tables.filter((t) => t.table === filterTable) : tables;
+  const selectGroups = embedded
+    ? moduleGroups.map((g) => ({ ...g, items: g.items.filter((t) => t.table === filterTable) })).filter((g) => g.items.length)
+    : moduleGroups;
+
   const pct = Math.min(100, Math.max(0, progress?.pct ?? 0));
 
   // The table whose run is currently live — used to render an inline progress bar in its row.
@@ -411,7 +421,7 @@ export function Ora2pgMigrationDashboard() {
               onChange={(e) => setSelected(e.target.value)}
               disabled={busy}
             >
-              {moduleGroups.map((g) => (
+              {selectGroups.map((g) => (
                 <optgroup key={g.module} label={g.module}>
                   {g.items.map((t) => (
                     <option key={t.table} value={t.table}>
@@ -501,39 +511,43 @@ export function Ora2pgMigrationDashboard() {
             <h4 className="text-sm font-semibold text-neutral-700">
               Target table status &amp; reconciliation (mdp_staging)
             </h4>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={onVerifySelected}
-                disabled={batchRunning || verifySel.size === 0}
-                title="Verify the ticked tables — runs in the background, one at a time"
-              >
-                <ListChecks size={14} />{" "}
-                {batchRunning ? "Verifying…" : `Verify selected${verifySel.size ? ` (${verifySel.size})` : ""}`}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => onDownloadLog("csv")}>
-                <Download size={14} /> Log .csv
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => onDownloadLog("json")}>
-                <Download size={14} /> Log .json
-              </Button>
-            </div>
+            {!embedded && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onVerifySelected}
+                  disabled={batchRunning || verifySel.size === 0}
+                  title="Verify the ticked tables — runs in the background, one at a time"
+                >
+                  <ListChecks size={14} />{" "}
+                  {batchRunning ? "Verifying…" : `Verify selected${verifySel.size ? ` (${verifySel.size})` : ""}`}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => onDownloadLog("csv")}>
+                  <Download size={14} /> Log .csv
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => onDownloadLog("json")}>
+                  <Download size={14} /> Log .json
+                </Button>
+              </div>
+            )}
           </div>
           <Table>
             <THead>
               <TR>
-                <TH>
-                  <input
-                    type="checkbox"
-                    aria-label="Select all"
-                    checked={tables.length > 0 && verifySel.size === tables.length}
-                    ref={(el) => {
-                      if (el) el.indeterminate = verifySel.size > 0 && verifySel.size < tables.length;
-                    }}
-                    onChange={toggleSelectAll}
-                  />
-                </TH>
+                {!embedded && (
+                  <TH>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all"
+                      checked={tables.length > 0 && verifySel.size === tables.length}
+                      ref={(el) => {
+                        if (el) el.indeterminate = verifySel.size > 0 && verifySel.size < tables.length;
+                      }}
+                      onChange={toggleSelectAll}
+                    />
+                  </TH>
+                )}
                 <TH>Module</TH>
                 <TH>Table</TH>
                 <TH>Primary Key</TH>
@@ -548,17 +562,19 @@ export function Ora2pgMigrationDashboard() {
               </TR>
             </THead>
             <TBody>
-              {tables.map((t) => (
+              {shownTables.map((t) => (
                 <Fragment key={t.table}>
                 <TR>
-                  <TD>
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${t.table}`}
-                      checked={verifySel.has(t.table)}
-                      onChange={() => toggleVerifySel(t.table)}
-                    />
-                  </TD>
+                  {!embedded && (
+                    <TD>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${t.table}`}
+                        checked={verifySel.has(t.table)}
+                        onChange={() => toggleVerifySel(t.table)}
+                      />
+                    </TD>
+                  )}
                   <TD className="text-neutral-500">{t.module}</TD>
                   <TD className="font-medium text-neutral-800">{t.table}</TD>
                   <TD>
@@ -673,7 +689,7 @@ export function Ora2pgMigrationDashboard() {
                 </TR>
                 {activeTable === t.table && progress && (
                   <TR>
-                    <TD colSpan={12} className="bg-brand/5">
+                    <TD colSpan={embedded ? 11 : 12} className="bg-brand/5">
                       <div className="flex items-center gap-3 px-1 py-1">
                         <Badge tone={statusTone(progress.status)}>
                           {progress.status}
