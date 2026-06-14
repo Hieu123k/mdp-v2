@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Settings2,
   ShieldCheck,
+  SlidersHorizontal,
   SquarePen,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -73,6 +74,74 @@ import { cn } from "@/lib/utils";
 const RUN_TYPES = ["full_load", "incremental", "validation_only", "external_bulk"];
 const TRIGGER_TYPES = ["manual", "external", "scheduled"];
 const JOB_STATUSES = ["active", "inactive"];
+
+// prompt 12: page-level Migration Jobs table settings (the KPI strip is computed, not configured). These
+// drive the Settings panel and are persisted per-browser in localStorage. FE-only — no backend.
+type MjDensity = "comfortable" | "compact";
+type MjRowsPerPage = 25 | 50 | 100 | "all";
+type MjSettings = {
+  hiddenColumns: string[];
+  autoRefreshSec: number | null; // null = off (no periodic refetch)
+  density: MjDensity;
+  rowsPerPage: MjRowsPerPage;
+  defaultSort: { key: string; dir: "asc" | "desc" } | null;
+};
+const MJ_SETTINGS_KEY = "mdp.migrationJobs.settings.v1";
+const MJ_DEFAULT_SETTINGS: MjSettings = {
+  hiddenColumns: [],
+  autoRefreshSec: 20, // preserves prompt-11's 20s streaming-progress refetch as the default
+  density: "comfortable",
+  rowsPerPage: 50,
+  defaultSort: null,
+};
+// the table columns (order = render order). `locked` columns can never be hidden so the table is never
+// blank. `sortKey` (when set) makes the column selectable as the default sort.
+const MJ_COLUMNS: { key: string; label: string; locked?: boolean; sortKey?: string }[] = [
+  { key: "select", label: "Select (Verify)" },
+  { key: "actions", label: "Actions", locked: true },
+  { key: "name", label: "Name", locked: true, sortKey: "name" },
+  { key: "source", label: "Source" },
+  { key: "target", label: "Target Table" },
+  { key: "watermark", label: "Watermark", sortKey: "watermark" },
+  { key: "load_mode", label: "Load Mode", sortKey: "load_mode" },
+  { key: "status", label: "Status / Verify", sortKey: "status" },
+  { key: "streaming", label: "Streaming" },
+  { key: "streaming_progress", label: "Streaming progress", sortKey: "next_run" },
+  { key: "latest_run", label: "Latest Run", sortKey: "latest_run" },
+  { key: "rows", label: "Rows", sortKey: "rows" },
+];
+const MJ_AUTO_REFRESH_OPTIONS: { label: string; value: number | null }[] = [
+  { label: "Off", value: null },
+  { label: "10s", value: 10 },
+  { label: "20s", value: 20 },
+  { label: "30s", value: 30 },
+  { label: "60s", value: 60 },
+];
+const MJ_ROWS_PER_PAGE_OPTIONS: MjRowsPerPage[] = [25, 50, 100, "all"];
+
+// prompt 12: validate persisted settings before merging — a hand-edited / stale / corrupt localStorage
+// value must never crash render (e.g. a non-array hiddenColumns would throw on `.includes`) or produce
+// NaN pagination. Only well-typed fields survive; everything else falls back to the defaults.
+function sanitizeMjSettings(raw: unknown): Partial<MjSettings> {
+  if (!raw || typeof raw !== "object") return {};
+  const r = raw as Record<string, unknown>;
+  const out: Partial<MjSettings> = {};
+  if (Array.isArray(r.hiddenColumns)) out.hiddenColumns = r.hiddenColumns.filter((x): x is string => typeof x === "string");
+  if (r.autoRefreshSec === null || (typeof r.autoRefreshSec === "number" && r.autoRefreshSec > 0)) {
+    out.autoRefreshSec = r.autoRefreshSec as number | null;
+  }
+  if (r.density === "compact" || r.density === "comfortable") out.density = r.density;
+  if (r.rowsPerPage === "all" || (typeof r.rowsPerPage === "number" && [25, 50, 100].includes(r.rowsPerPage))) {
+    out.rowsPerPage = r.rowsPerPage as MjRowsPerPage;
+  }
+  if (r.defaultSort === null) {
+    out.defaultSort = null;
+  } else if (r.defaultSort && typeof r.defaultSort === "object") {
+    const ds = r.defaultSort as Record<string, unknown>;
+    if (typeof ds.key === "string" && (ds.dir === "asc" || ds.dir === "desc")) out.defaultSort = { key: ds.key, dir: ds.dir };
+  }
+  return out;
+}
 
 type JobMode = "create" | "edit";
 type RunMode = "create" | "edit" | "view";
@@ -586,6 +655,27 @@ function StreamProgressCell({ cfg, nowMs }: { cfg: StreamingTable | undefined; n
   );
 }
 
+// prompt 12: a top-of-page KPI tile (the value is computed client-side from the already-loaded
+// jobs / ora2pg verdicts / streaming config — no extra fetch).
+function KpiTile({ label, value, tone = "neutral" }: { label: string; value: number; tone?: BadgeTone }) {
+  const color =
+    tone === "success"
+      ? "text-success"
+      : tone === "danger"
+        ? "text-danger"
+        : tone === "warning"
+          ? "text-warning"
+          : tone === "info"
+            ? "text-info"
+            : "text-neutral-900";
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
+      <div className={cn("text-2xl font-semibold tabular-nums", color)}>{value}</div>
+      <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
+    </div>
+  );
+}
+
 // prompt 08: a clickable, sort-aware table header (arrow shows the active sort direction).
 function SortableTH({
   label,
@@ -705,6 +795,51 @@ export default function MigrationJobsPage() {
   const [streamAvail, setStreamAvail] = useState(true);
   const [streamBusy, setStreamBusy] = useState<string | null>(null);
 
+  // prompt 12: page-level table settings (column visibility, auto-refresh, density, rows/page, default
+  // sort), persisted per-browser. Starts at defaults so SSR and the first client render match, then a
+  // mount effect hydrates from localStorage; a second effect persists on change (only after hydration).
+  const [settings, setSettings] = useState<MjSettings>(MJ_DEFAULT_SETTINGS);
+  // `hydrated` is STATE (not a ref) so the persist effect below skips on the mount commit (where the
+  // hydrated value hasn't been applied yet) and never overwrites stored settings with the defaults.
+  const [settingsHydrated, setSettingsHydrated] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<string>("view");
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(MJ_SETTINGS_KEY);
+      if (raw) setSettings((s) => ({ ...s, ...sanitizeMjSettings(JSON.parse(raw)) }));
+    } catch {
+      /* ignore malformed / blocked storage */
+    }
+    setSettingsHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    try {
+      window.localStorage.setItem(MJ_SETTINGS_KEY, JSON.stringify(settings));
+    } catch {
+      /* ignore quota / blocked storage */
+    }
+  }, [settings, settingsHydrated]);
+  const colVisible = useCallback(
+    (key: string) => {
+      const col = MJ_COLUMNS.find((c) => c.key === key);
+      if (col?.locked) return true; // Actions + Name never hide (table never goes blank)
+      return !settings.hiddenColumns.includes(key);
+    },
+    [settings.hiddenColumns],
+  );
+  const toggleColumn = useCallback(
+    (key: string) =>
+      setSettings((s) => ({
+        ...s,
+        hiddenColumns: s.hiddenColumns.includes(key)
+          ? s.hiddenColumns.filter((k) => k !== key)
+          : [...s.hiddenColumns, key],
+      })),
+    [],
+  );
+
   const loadStreamCfgs = useCallback(async () => {
     try {
       const r = await streamingConfigList();
@@ -721,21 +856,14 @@ export default function MigrationJobsPage() {
 
   // prompt 11: one shared 1s clock drives every row's next-run countdown (kept in the page so all rows
   // tick together; starts at 0 so the first server render and hydration match, then the mount effect sets
-  // the real time). Plus a ~20s refetch of the streaming config so last-run / status stay live after a
-  // streaming cycle. Reuses loadStreamCfgs + the existing streamCfgs state — no extra fetch loop, no extra
-  // state. Both intervals are cleared on unmount.
+  // the real time). The periodic data refetch is a SEPARATE, configurable effect below (prompt 12's
+  // auto-refresh setting replaced the hard-coded 20s here). Cleared on unmount.
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => {
     setNowMs(Date.now());
     const tick = setInterval(() => setNowMs(Date.now()), 1000);
-    const refetch = setInterval(() => {
-      void loadStreamCfgs();
-    }, 20000);
-    return () => {
-      clearInterval(tick);
-      clearInterval(refetch);
-    };
-  }, [loadStreamCfgs]);
+    return () => clearInterval(tick);
+  }, []);
 
   // A table "would full-reload" when it has no usable upsert key (no watermark, or a date marker with
   // no PK). Enabling such a table copies the whole view every cycle (heavy) → warn before turning it on.
@@ -880,6 +1008,15 @@ export default function MigrationJobsPage() {
       setSortDir("asc");
     }
   };
+  // prompt 12: apply the saved default sort — runs when settings hydrate from localStorage and when the
+  // user changes the default in Preferences. Clicking a header changes sortKey/sortDir only (not the
+  // stored default), so this effect never clobbers a live, user-driven sort.
+  useEffect(() => {
+    if (settings.defaultSort) {
+      setSortKey(settings.defaultSort.key as SortKey);
+      setSortDir(settings.defaultSort.dir);
+    }
+  }, [settings.defaultSort]);
   const sortedJobs = useMemo(() => {
     if (!sortKey) return jobs;
     const v = (j: MigrationJob): string | number => {
@@ -917,6 +1054,47 @@ export default function MigrationJobsPage() {
       return sortDir === "asc" ? c : -c;
     });
   }, [jobs, sortKey, sortDir, oraByTarget, streamCfgs]);
+
+  // prompt 12: KPI tiles — computed client-side from the already-loaded jobs / ora2pg verdicts /
+  // streaming config (no extra fetch). Real fields: streaming `enabled` + `last_status`/`last_error`;
+  // ora2pg `source_verdict` (MATCH | MISMATCH | ESTIMATE | PENDING) + `source_missed`/`last_missed`.
+  const kpis = useMemo(() => {
+    let streamingOn = 0;
+    let match = 0;
+    let needsAttention = 0;
+    let awaitingVerify = 0;
+    for (const j of jobs) {
+      const o = oraByTarget[j.target_table];
+      const c = streamCfgs[j.target_table];
+      if (c?.enabled) streamingOn += 1;
+      const verdict = o?.source_verdict;
+      if (verdict === "MATCH") match += 1;
+      const missed = (o?.source_missed ?? 0) > 0 || (o?.last_missed ?? 0) > 0;
+      if (verdict === "MISMATCH" || missed || c?.last_status === "error" || Boolean(c?.last_error)) needsAttention += 1;
+      if (!verdict || verdict === "PENDING") awaitingVerify += 1;
+    }
+    return { total: jobs.length, streamingOn, match, needsAttention, awaitingVerify };
+  }, [jobs, oraByTarget, streamCfgs]);
+
+  // prompt 12: rows-per-page pagination over the sorted jobs ("all" = no limit). Page clamps to range and
+  // resets when the page size changes.
+  const [page, setPage] = useState(1);
+  const pageSize = settings.rowsPerPage === "all" ? Math.max(1, sortedJobs.length) : settings.rowsPerPage;
+  const totalPages = Math.max(1, Math.ceil(sortedJobs.length / pageSize));
+  // derive a safe page DURING render so the slice + "Showing X-Y" labels never go out of range for a frame
+  // (e.g. when an auto-refresh shrinks the job count while you sit on a now-too-high page). The effect just
+  // keeps the stored page in sync afterwards.
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+  useEffect(() => {
+    setPage(1);
+  }, [settings.rowsPerPage]);
+  const pagedJobs =
+    settings.rowsPerPage === "all" ? sortedJobs : sortedJobs.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const firstRow = sortedJobs.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const lastRow = settings.rowsPerPage === "all" ? sortedJobs.length : Math.min(safePage * pageSize, sortedJobs.length);
 
   // ⚙ drawer: tabbed (Config / Migration / Streaming). Opening loads the job into the edit form.
   const [drawerTab, setDrawerTab] = useState<string>("config");
@@ -968,9 +1146,32 @@ export default function MigrationJobsPage() {
     }
   }, []);
 
+  const reloadJobsSilent = useCallback(async () => {
+    // prompt 12: refresh jobs WITHOUT the full-page "Loading..." flash — used by the auto-refresh interval.
+    try {
+      setJobs(await listMigrationJobs());
+    } catch {
+      /* keep the current rows on a transient refresh error */
+    }
+  }, []);
+
   useEffect(() => {
     reloadJobs();
   }, [reloadJobs]);
+
+  // prompt 12: configurable auto-refresh — reloads jobs + ora2pg verdicts + streaming config (feeding the
+  // KPI tiles and the streaming-progress countdown) every `autoRefreshSec`; `null` = off. Replaces
+  // prompt-11's hard-coded 20s. The 1s countdown tick is a separate effect and always runs.
+  useEffect(() => {
+    const sec = settings.autoRefreshSec;
+    if (!sec) return;
+    const id = setInterval(() => {
+      void reloadJobsSilent();
+      void loadStreamCfgs();
+      void loadOra();
+    }, sec * 1000);
+    return () => clearInterval(id);
+  }, [settings.autoRefreshSec, reloadJobsSilent, loadStreamCfgs, loadOra]);
 
   function setFormValue<K extends keyof JobForm>(key: K, value: JobForm[K]) {
     setJobForm((current) => ({ ...current, [key]: value }));
@@ -1592,6 +1793,15 @@ export default function MigrationJobsPage() {
           </p>
         </CardBody>
       </Card>
+      {/* prompt 12: KPI tiles — computed client-side from the loaded jobs / ora2pg verdicts / streaming
+          config (no backend). They update on the same auto-refresh cadence and when a switch is toggled. */}
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <KpiTile label="Total tables" value={kpis.total} />
+        <KpiTile label="Streaming on" value={kpis.streamingOn} tone="success" />
+        <KpiTile label="Match" value={kpis.match} tone="success" />
+        <KpiTile label="Needs attention" value={kpis.needsAttention} tone="danger" />
+        <KpiTile label="Awaiting verify" value={kpis.awaitingVerify} tone="warning" />
+      </div>
       {pageError && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{pageError}</p>}
       {notice && <p className="mb-4 rounded-md bg-success/10 px-3 py-2 text-sm text-success">{notice}</p>}
       <Card>
@@ -1600,6 +1810,17 @@ export default function MigrationJobsPage() {
           subtitle={`${jobs.length} total`}
           action={
             <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSettingsTab("view");
+                  setSettingsOpen(true);
+                }}
+                title="Table settings - show/hide columns, auto-refresh, density, rows per page, default sort (this browser)"
+              >
+                <SlidersHorizontal size={14} /> Table settings
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -1623,148 +1844,312 @@ export default function MigrationJobsPage() {
           {loading ? (
             <p className="text-sm text-neutral-400">Loading...</p>
           ) : (
-            <Table className="table-fixed text-[13px]">
+            <Table className={cn("table-fixed text-[13px]", settings.density === "compact" && "[&_td]:py-1 [&_th]:py-1.5")}>
+              {/* prompt 12: columns render only when visible (colgroup / THead / TBody stay in sync via colVisible). */}
               <colgroup>
-                <col className="w-[36px]" />
-                <col className="w-[90px]" />
-                <col className="w-[170px]" />
-                <col className="w-[170px]" />
-                <col className="w-[150px]" />
-                <col className="w-[150px]" />
-                <col className="w-[105px]" />
-                <col className="w-[150px]" />
-                <col className="w-[95px]" />
-                <col className="w-[150px]" />
-                <col className="w-[105px]" />
-                <col className="w-[90px]" />
+                {colVisible("select") && <col className="w-[36px]" />}
+                {colVisible("actions") && <col className="w-[90px]" />}
+                {colVisible("name") && <col className="w-[170px]" />}
+                {colVisible("source") && <col className="w-[170px]" />}
+                {colVisible("target") && <col className="w-[150px]" />}
+                {colVisible("watermark") && <col className="w-[150px]" />}
+                {colVisible("load_mode") && <col className="w-[105px]" />}
+                {colVisible("status") && <col className="w-[150px]" />}
+                {colVisible("streaming") && <col className="w-[95px]" />}
+                {colVisible("streaming_progress") && <col className="w-[150px]" />}
+                {colVisible("latest_run") && <col className="w-[105px]" />}
+                {colVisible("rows") && <col className="w-[90px]" />}
               </colgroup>
               <THead>
                 <TR>
-                  <TH>
-                    <input
-                      type="checkbox"
-                      aria-label="Select all"
-                      checked={allOraTables.length > 0 && verifySel.size >= allOraTables.length}
-                      ref={(el) => { if (el) el.indeterminate = verifySel.size > 0 && verifySel.size < allOraTables.length; }}
-                      onChange={toggleSelectAll}
-                    />
-                  </TH>
-                  <TH className="text-center">Actions</TH>
-                  <SortableTH label="Name" k="name" active={sortKey === "name"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
-                  <TH>Source</TH>
-                  <TH>Target Table</TH>
-                  <SortableTH label="Watermark" k="watermark" active={sortKey === "watermark"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
-                  <SortableTH label="Load Mode" k="load_mode" active={sortKey === "load_mode"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
-                  <SortableTH label="Status / Verify" k="status" active={sortKey === "status"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
-                  <TH>Streaming</TH>
-                  <SortableTH label="Streaming progress" k="next_run" active={sortKey === "next_run"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
-                  <SortableTH label="Latest Run" k="latest_run" active={sortKey === "latest_run"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
-                  <SortableTH label="Rows" k="rows" active={sortKey === "rows"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
+                  {colVisible("select") && (
+                    <TH>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all"
+                        checked={allOraTables.length > 0 && verifySel.size >= allOraTables.length}
+                        ref={(el) => { if (el) el.indeterminate = verifySel.size > 0 && verifySel.size < allOraTables.length; }}
+                        onChange={toggleSelectAll}
+                      />
+                    </TH>
+                  )}
+                  {colVisible("actions") && <TH className="text-center">Actions</TH>}
+                  {colVisible("name") && <SortableTH label="Name" k="name" active={sortKey === "name"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />}
+                  {colVisible("source") && <TH>Source</TH>}
+                  {colVisible("target") && <TH>Target Table</TH>}
+                  {colVisible("watermark") && <SortableTH label="Watermark" k="watermark" active={sortKey === "watermark"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />}
+                  {colVisible("load_mode") && <SortableTH label="Load Mode" k="load_mode" active={sortKey === "load_mode"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />}
+                  {colVisible("status") && <SortableTH label="Status / Verify" k="status" active={sortKey === "status"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />}
+                  {colVisible("streaming") && <TH>Streaming</TH>}
+                  {colVisible("streaming_progress") && <SortableTH label="Streaming progress" k="next_run" active={sortKey === "next_run"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />}
+                  {colVisible("latest_run") && <SortableTH label="Latest Run" k="latest_run" active={sortKey === "latest_run"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />}
+                  {colVisible("rows") && <SortableTH label="Rows" k="rows" active={sortKey === "rows"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />}
                 </TR>
               </THead>
               <TBody>
-                {sortedJobs.map((job) => {
+                {pagedJobs.map((job) => {
                   const ora = oraByTarget[job.target_table];
                   const cfg = streamCfgs[job.target_table];
                   return (
                     <TR key={job.id}>
-                      <TD>
-                        {ora ? (
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${ora.table}`}
-                            checked={verifySel.has(ora.table)}
-                            onChange={() => toggleVerifySel(ora.table)}
-                          />
-                        ) : null}
-                      </TD>
-                      <TD>
-                        <div className="flex items-center justify-center gap-1">
-                          <ActionIcon title={`Open ${job.name}`} onClick={() => void openDrawer(job)} disabled={busy}>
-                            <Settings2 size={15} />
-                          </ActionIcon>
-                          <ActionIcon
-                            title={`Verify ${ora?.table ?? job.target_table}`}
-                            onClick={() => ora && void verifyOne(ora.table)}
-                            disabled={!ora || verifying === ora?.table}
-                          >
-                            <CheckCircle2 size={15} />
-                          </ActionIcon>
-                        </div>
-                      </TD>
-                      <TD className="truncate font-medium" title={job.name}>{job.name}</TD>
-                      <TD className="truncate text-xs" title={`${job.source_system || job.source_type} - ${job.source_table || "-"}`}>
-                        <span className="text-neutral-600">{job.source_system || job.source_type}</span>
-                        {job.source_table ? <span className="ml-1 font-mono text-neutral-400">{job.source_table}</span> : null}
-                      </TD>
-                      <TD className="truncate font-mono text-xs" title={targetLabel(job)}>{targetLabel(job)}</TD>
-                      <TD>
-                        {job.watermark_column ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="font-mono text-xs text-neutral-700">{job.watermark_column}</span>
-                            {job.watermark_column_type && job.watermark_column_type !== "unknown" ? (
-                              <Badge tone="neutral">{job.watermark_column_type}</Badge>
-                            ) : null}
-                          </span>
-                        ) : (
-                          <span className="text-neutral-400" title="No watermark - incremental needs one; otherwise full-reload">
-                            - full-reload
-                          </span>
-                        )}
-                      </TD>
-                      <TD>{titleize(job.load_mode)}</TD>
-                      <TD>
-                        <div className="flex flex-col items-start gap-1">
-                          <Badge tone={badgeTone(job.status)}>{job.status}</Badge>
-                          {ora?.source_verdict ? <Badge tone={verdictTone(ora.source_verdict)}>{verdictLabel(ora.source_verdict)}</Badge> : null}
-                          {ora && batchStatus[ora.table] ? <Badge tone={batchQueueTone(batchStatus[ora.table].status)}>{batchStatus[ora.table].status}</Badge> : null}
-                        </div>
-                      </TD>
-                      <TD>
-                        {(() => {
-                          if (!streamAvail || !cfg) {
-                            return <span className="text-neutral-300" title="No streaming config for this table">-</span>;
-                          }
-                          return (
-                            <div className="flex items-center gap-1.5">
-                              <StreamSwitch
-                                on={cfg.enabled}
-                                disabled={!canConfigureStreaming || streamBusy === job.target_table}
-                                onToggle={(next) => void toggleStreaming(job, next)}
-                                label={
-                                  canConfigureStreaming
-                                    ? `Toggle streaming for ${cfg.source_view}`
-                                    : `Streaming ${cfg.enabled ? "on" : "off"} (requires streaming.configure)`
-                                }
-                              />
-                              {cfg.enabled && wouldFullReload(cfg) && (
-                                <span title="No watermark/PK - full reload (heavy, min 12h)">
-                                  <AlertTriangle size={13} className="text-warning" />
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </TD>
-                      <TD>
-                        <StreamProgressCell cfg={cfg} nowMs={nowMs} />
-                      </TD>
-                      <TD>
-                        <Badge tone={badgeTone(job.latest_run_status || ora?.last_run_status)}>
-                          {job.latest_run_status || ora?.last_run_status || "none"}
-                        </Badge>
-                      </TD>
-                      <TD className="font-mono text-xs">
-                        {job.latest_target_row_count != null ? fmtIntCell(job.latest_target_row_count) : fmtIntCell(ora?.current_rows)}
-                      </TD>
+                      {colVisible("select") && (
+                        <TD>
+                          {ora ? (
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${ora.table}`}
+                              checked={verifySel.has(ora.table)}
+                              onChange={() => toggleVerifySel(ora.table)}
+                            />
+                          ) : null}
+                        </TD>
+                      )}
+                      {colVisible("actions") && (
+                        <TD>
+                          <div className="flex items-center justify-center gap-1">
+                            <ActionIcon title={`Open ${job.name}`} onClick={() => void openDrawer(job)} disabled={busy}>
+                              <Settings2 size={15} />
+                            </ActionIcon>
+                            <ActionIcon
+                              title={`Verify ${ora?.table ?? job.target_table}`}
+                              onClick={() => ora && void verifyOne(ora.table)}
+                              disabled={!ora || verifying === ora?.table}
+                            >
+                              <CheckCircle2 size={15} />
+                            </ActionIcon>
+                          </div>
+                        </TD>
+                      )}
+                      {colVisible("name") && <TD className="truncate font-medium" title={job.name}>{job.name}</TD>}
+                      {colVisible("source") && (
+                        <TD className="truncate text-xs" title={`${job.source_system || job.source_type} - ${job.source_table || "-"}`}>
+                          <span className="text-neutral-600">{job.source_system || job.source_type}</span>
+                          {job.source_table ? <span className="ml-1 font-mono text-neutral-400">{job.source_table}</span> : null}
+                        </TD>
+                      )}
+                      {colVisible("target") && <TD className="truncate font-mono text-xs" title={targetLabel(job)}>{targetLabel(job)}</TD>}
+                      {colVisible("watermark") && (
+                        <TD>
+                          {job.watermark_column ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="font-mono text-xs text-neutral-700">{job.watermark_column}</span>
+                              {job.watermark_column_type && job.watermark_column_type !== "unknown" ? (
+                                <Badge tone="neutral">{job.watermark_column_type}</Badge>
+                              ) : null}
+                            </span>
+                          ) : (
+                            <span className="text-neutral-400" title="No watermark - incremental needs one; otherwise full-reload">
+                              - full-reload
+                            </span>
+                          )}
+                        </TD>
+                      )}
+                      {colVisible("load_mode") && <TD>{titleize(job.load_mode)}</TD>}
+                      {colVisible("status") && (
+                        <TD>
+                          <div className="flex flex-col items-start gap-1">
+                            <Badge tone={badgeTone(job.status)}>{job.status}</Badge>
+                            {ora?.source_verdict ? <Badge tone={verdictTone(ora.source_verdict)}>{verdictLabel(ora.source_verdict)}</Badge> : null}
+                            {ora && batchStatus[ora.table] ? <Badge tone={batchQueueTone(batchStatus[ora.table].status)}>{batchStatus[ora.table].status}</Badge> : null}
+                          </div>
+                        </TD>
+                      )}
+                      {colVisible("streaming") && (
+                        <TD>
+                          {(() => {
+                            if (!streamAvail || !cfg) {
+                              return <span className="text-neutral-300" title="No streaming config for this table">-</span>;
+                            }
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <StreamSwitch
+                                  on={cfg.enabled}
+                                  disabled={!canConfigureStreaming || streamBusy === job.target_table}
+                                  onToggle={(next) => void toggleStreaming(job, next)}
+                                  label={
+                                    canConfigureStreaming
+                                      ? `Toggle streaming for ${cfg.source_view}`
+                                      : `Streaming ${cfg.enabled ? "on" : "off"} (requires streaming.configure)`
+                                  }
+                                />
+                                {cfg.enabled && wouldFullReload(cfg) && (
+                                  <span title="No watermark/PK - full reload (heavy, min 12h)">
+                                    <AlertTriangle size={13} className="text-warning" />
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </TD>
+                      )}
+                      {colVisible("streaming_progress") && (
+                        <TD>
+                          <StreamProgressCell cfg={cfg} nowMs={nowMs} />
+                        </TD>
+                      )}
+                      {colVisible("latest_run") && (
+                        <TD>
+                          <Badge tone={badgeTone(job.latest_run_status || ora?.last_run_status)}>
+                            {job.latest_run_status || ora?.last_run_status || "none"}
+                          </Badge>
+                        </TD>
+                      )}
+                      {colVisible("rows") && (
+                        <TD className="font-mono text-xs">
+                          {job.latest_target_row_count != null ? fmtIntCell(job.latest_target_row_count) : fmtIntCell(ora?.current_rows)}
+                        </TD>
+                      )}
                     </TR>
                   );
                 })}
               </TBody>
             </Table>
           )}
+          {/* prompt 12: pagination footer (rows-per-page) — hidden when everything fits on one page. */}
+          {!loading && settings.rowsPerPage !== "all" && totalPages > 1 && (
+            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-neutral-600">
+              <span>
+                Showing {firstRow}-{lastRow} of {sortedJobs.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" disabled={safePage <= 1} onClick={() => setPage(Math.max(1, safePage - 1))}>
+                  Prev
+                </Button>
+                <span>
+                  Page {safePage} / {totalPages}
+                </span>
+                <Button variant="ghost" size="sm" disabled={safePage >= totalPages} onClick={() => setPage(Math.min(totalPages, safePage + 1))}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardBody>
       </Card>
+
+      {/* prompt 12: page-level Table settings panel (View columns + Preferences) — DISTINCT from the
+          per-row ⚙ streaming drawer. Everything persists per-browser in localStorage. */}
+      <Modal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title="Table settings"
+        className="overflow-hidden"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setSettings(MJ_DEFAULT_SETTINGS)} title="Reset all table settings to default">
+              <RotateCcw size={14} /> Reset to default
+            </Button>
+            <Button onClick={() => setSettingsOpen(false)}>Done</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Tabs
+            tabs={[
+              { key: "view", label: "View" },
+              { key: "prefs", label: "Preferences" },
+            ]}
+            active={settingsTab}
+            onChange={setSettingsTab}
+          />
+          {settingsTab === "view" && (
+            <div className="space-y-2">
+              <p className="text-xs text-neutral-500">
+                Show or hide columns. Changes apply immediately and are saved in this browser. Actions and Name
+                always stay visible so the table is never blank.
+              </p>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {MJ_COLUMNS.map((c) => (
+                  <label
+                    key={c.key}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm",
+                      c.locked ? "bg-neutral-50 text-neutral-400" : "text-neutral-700",
+                    )}
+                  >
+                    <input type="checkbox" checked={colVisible(c.key)} disabled={c.locked} onChange={() => toggleColumn(c.key)} />
+                    {c.label}
+                    {c.locked ? <span className="ml-auto text-[11px] uppercase tracking-wide">locked</span> : null}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {settingsTab === "prefs" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Select
+                label="Auto-refresh"
+                value={settings.autoRefreshSec === null ? "off" : String(settings.autoRefreshSec)}
+                onChange={(e) =>
+                  setSettings((s) => ({ ...s, autoRefreshSec: e.target.value === "off" ? null : Number(e.target.value) }))
+                }
+              >
+                {MJ_AUTO_REFRESH_OPTIONS.map((o) => (
+                  <option key={o.label} value={o.value === null ? "off" : String(o.value)}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                label="Density"
+                value={settings.density}
+                onChange={(e) => setSettings((s) => ({ ...s, density: e.target.value as MjDensity }))}
+              >
+                <option value="comfortable">Comfortable</option>
+                <option value="compact">Compact</option>
+              </Select>
+              <Select
+                label="Rows per page"
+                value={String(settings.rowsPerPage)}
+                onChange={(e) =>
+                  setSettings((s) => ({
+                    ...s,
+                    rowsPerPage: e.target.value === "all" ? "all" : (Number(e.target.value) as MjRowsPerPage),
+                  }))
+                }
+              >
+                {MJ_ROWS_PER_PAGE_OPTIONS.map((r) => (
+                  <option key={String(r)} value={String(r)}>
+                    {r === "all" ? "All" : r}
+                  </option>
+                ))}
+              </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <Select
+                  label="Default sort"
+                  value={settings.defaultSort?.key ?? ""}
+                  onChange={(e) =>
+                    setSettings((s) => ({
+                      ...s,
+                      defaultSort: e.target.value ? { key: e.target.value, dir: s.defaultSort?.dir ?? "asc" } : null,
+                    }))
+                  }
+                >
+                  <option value="">None</option>
+                  {MJ_COLUMNS.filter((c) => c.sortKey).map((c) => (
+                    <option key={c.sortKey} value={c.sortKey}>
+                      {c.label}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  label="Direction"
+                  value={settings.defaultSort?.dir ?? "asc"}
+                  disabled={!settings.defaultSort}
+                  onChange={(e) =>
+                    setSettings((s) =>
+                      s.defaultSort ? { ...s, defaultSort: { ...s.defaultSort, dir: e.target.value as "asc" | "desc" } } : s,
+                    )
+                  }
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </Select>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <Modal
         open={templateOpen}
