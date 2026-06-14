@@ -161,6 +161,18 @@ def _count_target(target_table: str) -> int | None:
         return None
 
 
+def _analyze_target(schema: str, target: str) -> None:
+    """prompt 15: refresh the target table's planner stats (reltuples) right after a full-reload atomic
+    swap, so the dashboard's O(1) estimate isn't stale by millions before the next autovacuum. The grid
+    verdict already uses exact Verify counts, but this keeps the displayed estimate honest. Best-effort;
+    never raises."""
+    try:
+        with engine.begin() as conn:
+            conn.exec_driver_sql(f'ANALYZE "{schema}"."{target}"')
+    except Exception:
+        pass
+
+
 def _source_estimate(source_view: str) -> int | None:
     """Cached source row-count estimate (Ora2pgSourceCount) used to seed the live-progress
     denominator when ora2pg can't pre-count the view. Best-effort; None when not cached."""
@@ -982,6 +994,7 @@ def full_reload_once(table: Ora2pgTable, *, pk_columns: list[str] | None = None)
 
         # 3) ATOMIC SWAP — live target never empty
         _atomic_swap(schema, target, new_target, old_target, pk_columns)
+        _analyze_target(schema, target)  # prompt 15: fresh reltuples so the grid estimate isn't stale
         result["rows_after"] = _count_target(target)
         rb, ra = result["rows_before"], result["rows_after"]
         result["rows_added"] = (ra - rb) if (rb is not None and ra is not None) else ra

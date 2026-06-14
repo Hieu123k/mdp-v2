@@ -199,13 +199,29 @@ def verify_exact(db: Session, table: Ora2pgTable) -> Ora2pgSourceCount | None:
     )
 
 
-def source_verdict(row: Ora2pgSourceCount | None, current_rows: int | None) -> str:
-    """MATCH/MISMATCH only from an EXACT source count; an estimate yields ESTIMATE (never a red
-    MISMATCH), and no usable count yields PENDING."""
+def verdict_tolerance(source_count: int | None, *, is_streaming: bool) -> int:
+    """prompt 15: allowed |source - target| diff for a MATCH. A STREAMING-enabled table lags Oracle by
+    the not-yet-pulled rows (live-lag) → tolerate a small diff = max(rows, ratio * source). A
+    non-streaming (migrate-once) table requires an exact match → tolerance 0."""
+    if not is_streaming:
+        return 0
+    rows = max(0, settings.streaming_verdict_tolerance_rows)
+    ratio = max(0.0, settings.streaming_verdict_tolerance_ratio)
+    by_ratio = int(ratio * source_count) if source_count else 0
+    return max(rows, by_ratio)
+
+
+def source_verdict(
+    row: Ora2pgSourceCount | None, current_rows: int | None, *, tolerance: int = 0
+) -> str:
+    """MATCH/MISMATCH only from an EXACT source count vs the EXACT target count (``current_rows`` =
+    the last Verify's exact target rows — NEVER a reltuples estimate, prompt 15). Within ``tolerance``
+    rows counts as MATCH (live-lag). An estimate yields ESTIMATE (never a red MISMATCH); no usable
+    count yields PENDING."""
     if row is None or row.source_row_count is None:
         return "PENDING"
     if row.count_mode == "exact" and not row.approximate:
         if current_rows is None:
             return "PENDING"
-        return "MATCH" if row.source_row_count == current_rows else "MISMATCH"
+        return "MATCH" if abs(row.source_row_count - current_rows) <= max(0, tolerance) else "MISMATCH"
     return "ESTIMATE"

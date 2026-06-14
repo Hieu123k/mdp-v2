@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     streaming_enabled: bool = True
     streaming_interval: int = 60  # loop tick seconds (per-table cadence = poll_interval_sec)
 
+    # --- Verify verdict tolerance (prompt 15) ---
+    # A STREAMING-enabled table lags Oracle by the rows the loop has not yet pulled (live-lag, a few
+    # rows for F0911/F4111). A tiny |source - target| diff is NOT a real MISMATCH, so the grid + Verify
+    # treat it as MATCH when within the tolerance = max(rows, ratio * source). Non-streaming
+    # (migrate-once) tables require an EXACT match (tolerance 0). Env-tunable; no per-job storage.
+    streaming_verdict_tolerance_rows: int = 50
+    streaming_verdict_tolerance_ratio: float = 0.0001  # 0.01%
+
     @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
         if self.app_env != "production":
