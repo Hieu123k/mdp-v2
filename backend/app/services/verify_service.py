@@ -24,7 +24,8 @@ from app.core.config import settings
 from app.core.ora2pg_catalog import Ora2pgTable, get_table
 from app.db.session import SessionLocal
 from app.models.migration import MigrationJob, MigrationRun, MigrationValidation
-from app.services.source_count_service import source_verdict, verify_exact
+from app.models.streaming_config import StreamingConfig
+from app.services.source_count_service import source_verdict, verdict_tolerance, verify_exact
 
 # ---- shared verify core -------------------------------------------------------------------
 
@@ -65,7 +66,13 @@ def perform_verify(db: Any, table: Ora2pgTable) -> dict[str, Any]:
 
     target_rows = _count_target(db, table.target_table)
     cache_row = verify_exact(db, table)
-    verdict = source_verdict(cache_row, target_rows)
+    # prompt 15: a streaming-enabled table is allowed to lag a few rows (live-lag) before it counts as a
+    # MISMATCH; a non-streaming (migrate-once) table must match exactly.
+    cfg = db.scalar(select(StreamingConfig).where(StreamingConfig.source_view == table.table))
+    tol = verdict_tolerance(
+        cache_row.source_row_count if cache_row else None, is_streaming=bool(cfg and cfg.enabled)
+    )
+    verdict = source_verdict(cache_row, target_rows, tolerance=tol)
     src = cache_row.source_row_count if (cache_row and cache_row.status == "ok") else None
     missed = (src - target_rows) if (src is not None and target_rows is not None) else None
 

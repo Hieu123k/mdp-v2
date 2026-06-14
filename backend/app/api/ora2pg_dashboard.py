@@ -32,10 +32,12 @@ from app.core.ora2pg_catalog import (
 from app.db.session import engine, get_db
 from app.models.migration import MigrationJob, MigrationRun, MigrationValidation
 from app.models.source_count import Ora2pgSourceCount
+from app.models.streaming_config import StreamingConfig
 from app.models.user import User
 from app.services.source_count_service import (
     get_all_source_counts,
     source_verdict,
+    verdict_tolerance,
     verify_exact,
 )
 from app.services.ora2pg_runner import (
@@ -155,13 +157,25 @@ def _recon_fields(last: "MigrationRun | None") -> dict[str, Any]:
     }
 
 
-def _source_count_fields(row: "Ora2pgSourceCount | None", current_rows: int | None) -> dict[str, Any]:
-    """Source-count cache fields for a table (read from the cache — no Oracle call at load time).
-    `source_verdict` is MATCH/MISMATCH only when the cached count is EXACT; an estimate yields
-    ESTIMATE (not a red MISMATCH), nothing yields PENDING."""
+def _streaming_enabled_map(db: Session) -> dict[str, bool]:
+    """{source_view (UPPER): enabled} for the verdict tolerance — a streaming-enabled table is allowed
+    a small live-lag before MISMATCH. One query; degrades to {} on any error."""
+    try:
+        rows = db.execute(select(StreamingConfig.source_view, StreamingConfig.enabled)).all()
+        return {str(sv).upper(): bool(en) for sv, en in rows}
+    except Exception:
+        return {}
+
+
+def _source_count_fields(
+    row: "Ora2pgSourceCount | None", verify_target: int | None, *, tolerance: int = 0
+) -> dict[str, Any]:
+    """Source-count cache fields + verdict for a table. prompt 15: the verdict compares the EXACT cached
+    source count against the EXACT target count from the last Verify (``verify_target``) — NEVER the
+    reltuples estimate — with a tolerance for live-lag. Never verified → PENDING (not a red MISMATCH)."""
     missed = None
-    if row is not None and row.source_row_count is not None and current_rows is not None:
-        missed = row.source_row_count - current_rows
+    if row is not None and row.source_row_count is not None and verify_target is not None:
+        missed = row.source_row_count - verify_target
     return {
         "source_count": row.source_row_count if row else None,
         "source_count_mode": row.count_mode if row else None,
@@ -169,7 +183,7 @@ def _source_count_fields(row: "Ora2pgSourceCount | None", current_rows: int | No
         "source_approximate": row.approximate if row else None,
         "source_stale": (row.status != "ok") if row else False,
         "source_missed": missed,
-        "source_verdict": source_verdict(row, current_rows),
+        "source_verdict": source_verdict(row, verify_target, tolerance=tolerance),
     }
 
 
@@ -256,10 +270,23 @@ def list_tables(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
     items = []
     source_cache = get_all_source_counts(db)  # read cache once; NO Oracle call at load time
     target_cols_map = _all_target_columns(db)  # one query for PK missing-column warnings
+    streaming_on = _streaming_enabled_map(db)  # prompt 15: drives the live-lag verdict tolerance
     for t in MIGRATABLE_TABLES:
         job = db.scalar(select(MigrationJob).where(MigrationJob.name == _job_name(t.target_table)))
         last = _latest_run(db, job.id) if job else None
-        current_rows = _estimate_table(db, t.target_table)  # O(1) planner estimate (exact → Verify)
+        # prompt 15: the target column + verdict use the EXACT target count from the LAST VERIFY — the
+        # reltuples planner estimate is only a fallback for never-verified tables (so a stale estimate
+        # after a full-reload can NEVER produce a false MISMATCH; the verdict stays PENDING until a real
+        # Verify runs). Tolerance lets a streaming table lag a few live rows and still read MATCH.
+        verify_target = last.target_row_count if last else None
+        estimate = _estimate_table(db, t.target_table)  # O(1) planner estimate
+        current_rows = verify_target if verify_target is not None else estimate
+        current_rows_estimated = verify_target is None and estimate is not None
+        src_row = source_cache.get(t.table.upper())
+        tolerance = verdict_tolerance(
+            src_row.source_row_count if src_row else None,
+            is_streaming=streaming_on.get(t.table.upper(), False),
+        )
         pk = job.primary_key_columns if job else None
         items.append({
             "table": t.table,
@@ -269,7 +296,7 @@ def list_tables(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
             "target_table": t.target_table,
             "target_schema": settings.ora2pg_target_schema,
             "current_rows": current_rows,
-            "current_rows_estimated": True,
+            "current_rows_estimated": current_rows_estimated,
             "cursor": _cursor_for(db, t.target_table),
             "last_run_id": str(last.id) if last else None,
             "last_run_status": last.status if last else None,
@@ -277,7 +304,7 @@ def list_tables(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
             "pk_columns": pk,
             **_pk_status(job, pk, target_cols_map.get(t.target_table.lower())),
             **_recon_fields(last),
-            **_source_count_fields(source_cache.get(t.table.upper()), current_rows),
+            **_source_count_fields(src_row, verify_target, tolerance=tolerance),
         })
     return {"version": DASHBOARD_VERSION, "tables": items}
 

@@ -12,6 +12,7 @@ import {
   ListChecks,
   PlayCircle,
   Power,
+  RefreshCw,
   RotateCcw,
   Settings2,
   ShieldCheck,
@@ -54,6 +55,7 @@ import {
   validateMigrationTarget,
   streamingConfigList,
   streamingUpdateConfig,
+  streamingRunOnce,
   ora2pgListTables,
   ora2pgVerify,
   ora2pgDownloadReconciliation,
@@ -984,6 +986,106 @@ export default function MigrationJobsPage() {
     }
   }, [verifySel, loadOra, stopBatchPoll]);
 
+  // prompt 15: "Sync now" — pull new rows for one table (streaming run-once, which IGNORES the per-table
+  // enabled flag) then Verify (exact count) so the row + verdict update to MATCH. Reuses the existing
+  // run-once + Verify endpoints; no new engine. `syncing` is keyed by the Oracle view name (ora.table).
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [bulkSyncing, setBulkSyncing] = useState(false);
+
+  const syncOne = useCallback(
+    async (table: string): Promise<{ ok: boolean; rowsAdded: number | null; error: string | null }> => {
+      const r = await streamingRunOnce(table); // run-once (force; ignores `enabled`)
+      if (!r.ok) return { ok: false, rowsAdded: r.rows_added, error: r.error };
+      await ora2pgVerify(table); // then exact Verify → refreshes the saved verdict
+      return { ok: true, rowsAdded: r.rows_added, error: null };
+    },
+    [],
+  );
+
+  const syncNow = useCallback(
+    async (job: MigrationJob, table: string) => {
+      if (syncing || bulkSyncing) return; // only one run-once in flight (the container does one pull at a time)
+      const cfg = streamCfgs[job.target_table];
+      // Case-B warning: a table with no watermark / no usable upsert key full-reloads (heavy).
+      const fullReload = cfg ? wouldFullReload(cfg) : !job.watermark_column;
+      if (
+        fullReload &&
+        !window.confirm(`Sync now will FULL-RELOAD ${table} (re-copies the whole view — heavy). Continue?`)
+      ) {
+        return;
+      }
+      setSyncing(table);
+      setPageError(null);
+      setNotice(null);
+      try {
+        const r = await syncOne(table);
+        if (r.ok) {
+          setNotice(`Synced ${table}: +${r.rowsAdded ?? 0} row(s); verdict refreshed.`);
+        } else {
+          const hint =
+            r.error && /(exit\s*2|already|running|in progress|lock)/i.test(r.error)
+              ? " — a reload may be in progress; try again shortly."
+              : "";
+          setPageError(`Sync failed for ${table}: ${r.error ?? "run-once error"}${hint}`);
+        }
+        await loadOra();
+      } catch (e) {
+        setPageError(`Sync failed for ${table}: ${errorMessage(e)}`);
+      } finally {
+        setSyncing(null);
+      }
+    },
+    [streamCfgs, loadOra, syncOne, syncing, bulkSyncing],
+  );
+
+  // prompt 15 (optional): "Sync selected" — run-once + Verify on the ticked tables SEQUENTIALLY (never in
+  // parallel — the ora2pg container handles one pull at a time).
+  const syncSelected = useCallback(async () => {
+    if (syncing || bulkSyncing) return; // serialize with any in-flight single sync
+    const tables = Array.from(verifySel); // keyed by ora.table
+    if (tables.length === 0) return;
+    const jobByOraTable = new Map<string, MigrationJob>();
+    for (const j of jobs) {
+      const o = oraByTarget[j.target_table];
+      if (o) jobByOraTable.set(o.table, j);
+    }
+    const anyFullReload = tables.some((t) => {
+      const j = jobByOraTable.get(t);
+      const cfg = j ? streamCfgs[j.target_table] : undefined;
+      return cfg ? wouldFullReload(cfg) : j ? !j.watermark_column : true;
+    });
+    if (
+      !window.confirm(
+        `Sync now (run-once + Verify) on ${tables.length} table(s), one at a time.` +
+          (anyFullReload ? " Some have no watermark and will FULL-RELOAD (heavy)." : "") +
+          " Continue?",
+      )
+    ) {
+      return;
+    }
+    setBulkSyncing(true);
+    setPageError(null);
+    setNotice(null);
+    let okCount = 0;
+    const failed: string[] = [];
+    for (const table of tables) {
+      setSyncing(table);
+      try {
+        const r = await syncOne(table);
+        if (r.ok) okCount += 1;
+        else failed.push(table);
+      } catch {
+        failed.push(table);
+      }
+    }
+    setSyncing(null);
+    setBulkSyncing(false);
+    await loadOra();
+    setNotice(
+      `Synced ${okCount}/${tables.length} table(s)${failed.length ? `; failed: ${failed.join(", ")}` : ""}.`,
+    );
+  }, [verifySel, jobs, oraByTarget, streamCfgs, loadOra, syncOne, syncing, bulkSyncing]);
+
   const allOraTables = jobs.map((j) => oraByTarget[j.target_table]?.table).filter(Boolean) as string[];
   const toggleVerifySel = (table: string) =>
     setVerifySel((cur) => {
@@ -1069,7 +1171,9 @@ export default function MigrationJobsPage() {
       if (c?.enabled) streamingOn += 1;
       const verdict = o?.source_verdict;
       if (verdict === "MATCH") match += 1;
-      const missed = (o?.source_missed ?? 0) > 0 || (o?.last_missed ?? 0) > 0;
+      // prompt 15: a MATCH verdict is clean even if source_missed > 0 (a streaming table's live-lag is
+      // within tolerance) — don't re-introduce the false "Needs attention" red the verdict fix removes.
+      const missed = verdict !== "MATCH" && ((o?.source_missed ?? 0) > 0 || (o?.last_missed ?? 0) > 0);
       if (verdict === "MISMATCH" || missed || c?.last_status === "error" || Boolean(c?.last_error)) needsAttention += 1;
       if (!verdict || verdict === "PENDING") awaitingVerify += 1;
     }
@@ -1831,6 +1935,16 @@ export default function MigrationJobsPage() {
                 <ListChecks size={14} />{" "}
                 {batchRunning ? "Verifying..." : `Verify selected${verifySel.size ? ` (${verifySel.size})` : ""}`}
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void syncSelected()}
+                disabled={!canConfigureStreaming || syncing !== null || bulkSyncing || verifySel.size === 0}
+                title="Sync now (run-once + Verify) on the ticked tables - sequentially, one at a time"
+              >
+                <RefreshCw size={14} className={bulkSyncing ? "animate-spin" : undefined} />{" "}
+                {bulkSyncing ? "Syncing..." : `Sync selected${verifySel.size ? ` (${verifySel.size})` : ""}`}
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => void ora2pgDownloadReconciliation("csv").catch((e) => setPageError(errorMessage(e)))}>
                 <Download size={14} /> Log .csv
               </Button>
@@ -1916,6 +2030,17 @@ export default function MigrationJobsPage() {
                               disabled={!ora || verifying === ora?.table}
                             >
                               <CheckCircle2 size={15} />
+                            </ActionIcon>
+                            <ActionIcon
+                              title={
+                                canConfigureStreaming
+                                  ? `Sync now ${ora?.table ?? job.target_table} (run-once + Verify)`
+                                  : "Sync now (requires streaming.run_once)"
+                              }
+                              onClick={() => ora && void syncNow(job, ora.table)}
+                              disabled={!ora || !canConfigureStreaming || syncing !== null || bulkSyncing}
+                            >
+                              <RefreshCw size={15} className={syncing === ora?.table ? "animate-spin" : undefined} />
                             </ActionIcon>
                           </div>
                         </TD>
