@@ -23,11 +23,12 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'grafana_ro')\gexec
 ALTER ROLE grafana_ro WITH LOGIN PASSWORD :'ro_pw';
 GRANT CONNECT ON DATABASE mdp TO grafana_ro;
 -- Grant SELECT on every MDP schema that exists, plus default privileges so future app-created
--- tables (e.g. new mdp_data.dm_* from Type A inbound) are auto-readable. SELECT-only, no writes.
+-- tables (e.g. new mdp_data.dm_* from Type A inbound, or Type B matviews in mdp_models) are
+-- auto-readable. SELECT-only, no writes. (Re-run after the first matview is built so mdp_models exists.)
 DO $$
 DECLARE s text;
 BEGIN
-  FOREACH s IN ARRAY ARRAY['public', 'mdp_data', 'mdp_staging'] LOOP
+  FOREACH s IN ARRAY ARRAY['public', 'mdp_data', 'mdp_staging', 'mdp_models'] LOOP
     IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = s) THEN
       EXECUTE format('GRANT USAGE ON SCHEMA %I TO grafana_ro', s);
       EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO grafana_ro', s);

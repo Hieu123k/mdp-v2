@@ -278,6 +278,55 @@ def query_type_b_records(
     return [normalize_row(dict(row)) for row in rows]
 
 
+def query_matview_records(
+    db: Session,
+    *,
+    model: DataModel,
+    filters: dict[str, str],
+    limit: int,
+    offset: int,
+) -> list[dict[str, Any]]:
+    """prompt 14: outbound read from the model's materialized view (``mdp_models.<model>``) instead of
+    the live JOIN. Same filters / ORDER BY pk / limit semantics + envelope as the Type B read-through —
+    the matview's columns ARE the attribute names, so it is a plain single-table read."""
+    from app.services.matview_service import matview_qualified_name
+
+    attributes = type_b_attribute_map(model)
+    invalid_filters = sorted(set(filters).difference(attributes))
+    if invalid_filters:
+        raise OutboundValidationError(
+            [
+                {"field": field, "message": "filter is not defined on this data model"}
+                for field in invalid_filters
+            ]
+        )
+    qname = matview_qualified_name(model)
+    select_clause = ", ".join(quote_identifier(attribute["name"]) for attribute in model.attributes)
+
+    where_clauses: list[str] = []
+    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    is_postgres = bool(db.bind and db.bind.dialect.name == "postgresql")
+    for index, (field, raw_value) in enumerate(filters.items()):
+        attribute = attributes[field]
+        param_name = f"filter_{index}"
+        value = coerce_filter_value(attribute, raw_value)
+        where_clause = f"{quote_identifier(field)} = :{param_name}"
+        params[param_name] = json.dumps(value) if attribute["data_type"] == "json" else value
+        if attribute["data_type"] == "json" and is_postgres:
+            where_clause = f"{quote_identifier(field)} = CAST(:{param_name} AS JSONB)"
+        where_clauses.append(where_clause)
+
+    where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    order_sql = ""
+    if model.primary_key and model.primary_key in attributes:
+        order_sql = f" ORDER BY {quote_identifier(model.primary_key)}"
+    statement = text(
+        f"SELECT {select_clause} FROM {qname}{where_sql}{order_sql} LIMIT :limit OFFSET :offset"
+    )
+    rows = db.execute(statement, params).mappings().all()
+    return [normalize_row(dict(row)) for row in rows]
+
+
 def query_outbound_record_by_key(
     db: Session,
     *,
@@ -373,13 +422,28 @@ def list_outbound(
         if model.type == "B":
             if include_raw:
                 raise ValueError("include_raw is only supported for Type A models.")
-            records = query_type_b_records(
-                db,
-                model=model,
-                filters=filters,
-                limit=limit,
-                offset=offset,
-            )
+            # prompt 14: when matview mode is on AND the matview actually exists (Postgres), read the
+            # pre-joined materialized view; otherwise (flag off, non-Postgres, or an enabled-but-not-yet-
+            # built / failed-build model) fall back to the live read-through JOIN. Identical result
+            # shape / filters / envelope either way — the read-through is always a safe fallback.
+            from app.services import matview_service
+
+            if matview_service.matview_available(db, model):
+                records = query_matview_records(
+                    db,
+                    model=model,
+                    filters=filters,
+                    limit=limit,
+                    offset=offset,
+                )
+            else:
+                records = query_type_b_records(
+                    db,
+                    model=model,
+                    filters=filters,
+                    limit=limit,
+                    offset=offset,
+                )
         else:
             records = query_outbound_records(
                 db,

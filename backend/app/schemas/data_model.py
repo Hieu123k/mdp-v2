@@ -116,6 +116,9 @@ class DataModelBase(BaseModel):
     sensitivity_level: str = Field(default="internal", max_length=50)
     ai_enabled: bool = True
     status: str = Field(default="active", max_length=50)
+    # prompt 14: per-model Materialized View opt-in (Type B). Off by default → existing read-through
+    # behaviour. The refresh metadata (last_refresh_at/duration/row_count) is read-only on DataModelRead.
+    matview_enabled: bool = False
 
     @model_validator(mode="after")
     def validate_model(self) -> "DataModelBase":
@@ -203,6 +206,7 @@ class DataModelUpdate(BaseModel):
     status: str | None = Field(default=None, max_length=50)
     latest_only: bool | None = None
     recency_column: str | None = Field(default=None, max_length=150)
+    matview_enabled: bool | None = None
 
     @model_validator(mode="after")
     def validate_partial_names(self) -> "DataModelUpdate":
@@ -220,6 +224,11 @@ class DataModelRead(DataModelBase):
     generated_table: str | None = None
     created_at: datetime
     updated_at: datetime
+    # prompt 14: read-only matview refresh metadata (written by matview_service, surfaced for the UI/report).
+    matview_last_refresh_at: datetime | None = None
+    matview_refresh_duration_sec: float | None = None
+    matview_row_count: int | None = None
+    matview_last_error: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

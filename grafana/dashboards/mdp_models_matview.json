@@ -1,0 +1,62 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 0,
+  "schemaVersion": 39,
+  "tags": ["mdp", "v2", "matview", "type-b"],
+  "time": { "from": "now-90d", "to": "now" },
+  "timezone": "browser",
+  "title": "MDP Type B Materialized View (PoC)",
+  "uid": "mdp_models_matview",
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Matview rows (mdp_models.poc_event_enriched)",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "blue", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT count(*) AS value FROM mdp_models.poc_event_enriched;" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Last refresh duration (sec)",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "decimals": 3, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT matview_refresh_duration_sec AS value FROM data_models WHERE name = 'poc_event_enriched';" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "Aggregate panel — events + avg(value) per site (GROUP BY, indexed)",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 4 },
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 1, "fillOpacity": 80 }, "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "orientation": "horizontal", "showValue": "auto", "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "xField": "site" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT site, count(*) AS events, round(avg(value)::numeric, 2) AS avg_value FROM mdp_models.poc_event_enriched GROUP BY site ORDER BY events DESC;" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Detail table — LIMIT 500 (time-filtered, ORDER BY event_ts)",
+      "datasource": { "type": "postgres", "uid": "mdp_postgres" },
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 13 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": { "showHeader": true },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "postgres", "uid": "mdp_postgres" }, "format": "table", "rawQuery": true, "rawSql": "SELECT event_id, machine_name, site, status, event_ts, value FROM mdp_models.poc_event_enriched WHERE $__timeFilter(event_ts) ORDER BY event_ts DESC LIMIT 500;" }
+      ]
+    }
+  ]
+}

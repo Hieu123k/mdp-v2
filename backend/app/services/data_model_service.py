@@ -113,6 +113,9 @@ def _payload_from_model(data_model: DataModel) -> dict[str, Any]:
         "source_system": data_model.source_system,
         "primary_key": data_model.primary_key,
         "generated_table": data_model.generated_table,
+        # prompt 14: preserve the matview toggle through a partial Edit that does not resend it (same
+        # reasoning as latest_only/recency_column below) so an unrelated edit never silently disables it.
+        "matview_enabled": data_model.matview_enabled,
         "attributes": data_model.attributes,
         "relationships": data_model.relationships,
         # Surface the persisted dedup config so a partial Edit that does not resend these fields
@@ -169,10 +172,17 @@ def create_data_model(db: Session, data_model_in: DataModelCreate) -> DataModel:
 
         db.commit()
         db.refresh(data_model)
-        return data_model
     except Exception:
         db.rollback()
         raise
+
+    # prompt 14: build the matview AFTER the model is committed (matview DDL runs on a separate
+    # autocommit connection; a build failure is recorded as matview_last_error, never lost data). No-op
+    # unless Type B + matview_enabled on PostgreSQL.
+    from app.services import matview_service
+
+    matview_service.apply_matview_on_save(db, data_model, previously_enabled=False)
+    return data_model
 
 
 def update_data_model(
@@ -180,6 +190,8 @@ def update_data_model(
     data_model: DataModel,
     data_model_in: DataModelUpdate,
 ) -> DataModel:
+    previously_enabled = bool(data_model.matview_enabled)
+    previous_name = data_model.name  # capture before the setattr loop may rename the model
     update_payload = validate_updated_data_model(data_model, data_model_in)
     validated = DataModelCreate.model_validate(update_payload)
     if validated.type == "B":
@@ -200,6 +212,15 @@ def update_data_model(
     db.add(data_model)
     db.commit()
     db.refresh(data_model)
+
+    # prompt 14: definition change = rebuild. Reconcile the matview after the model is committed —
+    # enabled (Type B/Postgres) rebuilds from the new attributes/joins; turned off drops it. No-op on
+    # SQLite / when the flag was and stays off.
+    from app.services import matview_service
+
+    matview_service.apply_matview_on_save(
+        db, data_model, previously_enabled=previously_enabled, previous_name=previous_name
+    )
     return data_model
 
 
@@ -209,6 +230,12 @@ def deactivate_data_model(db: Session, data_model: DataModel) -> DataModel:
     db.add(data_model)
     db.commit()
     db.refresh(data_model)
+    # prompt 14: drop the matview when the model is deactivated so it can't serve stale rows (re-enabling
+    # via Edit rebuilds it). Source data + the data_models record are untouched. No-op on non-Postgres.
+    if data_model.matview_enabled:
+        from app.services import matview_service
+
+        matview_service.drop_matview(db, data_model)
     return data_model
 
 
@@ -220,6 +247,11 @@ def delete_data_model_record(db: Session, data_model: DataModel) -> None:
 
     Transaction logs reference data_models.id (FK, RESTRICT). We KEEP those logs (audit/data-safety)
     but NULL their ``data_model_id`` first so the delete isn't blocked by the FK (and never 500s)."""
+    # prompt 14: drop the matview before removing the record so mdp_models is left clean (no orphan).
+    if data_model.matview_enabled:
+        from app.services import matview_service
+
+        matview_service.drop_matview(db, data_model)
     db.execute(
         update(Transaction)
         .where(Transaction.data_model_id == data_model.id)

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON, Uuid
@@ -70,3 +70,18 @@ class DataModel(Base):
         onupdate=func.now(),
         nullable=False,
     )
+    # prompt 14: Type B Materialized View PoC. `matview_enabled` is the per-model opt-in flag; the
+    # rest is refresh metadata written by matview_service (never user-settable). All additive — when
+    # the flag is off the model behaves exactly as the existing Type B read-through (no behaviour change).
+    matview_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+    matview_last_refresh_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    matview_refresh_duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
+    matview_row_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    matview_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

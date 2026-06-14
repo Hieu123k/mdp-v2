@@ -281,3 +281,33 @@ def delete_data_model_endpoint(
     if data_model is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data model not found")
     delete_data_model_record(db, data_model)
+
+
+@router.post(
+    "/{data_model_id}/refresh",
+    response_model=DataModelRead,
+    dependencies=[Depends(require_permission("data_model.edit"))],
+)
+def refresh_matview_endpoint(
+    data_model_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+) -> DataModel:
+    """prompt 14: manually (re)build + REFRESH the Type B materialized view. The first call builds +
+    populates it (non-concurrent); subsequent calls run ``REFRESH ... CONCURRENTLY`` so readers never
+    block. Requires the model to have matview mode enabled. The response carries the refresh metadata
+    (last_refresh_at / duration / row_count)."""
+    data_model = get_data_model(db, data_model_id)
+    if data_model is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data model not found")
+    if not data_model.matview_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Enable matview mode on this model before refreshing.",
+        )
+    from app.services import matview_service
+
+    try:
+        matview_service.refresh_matview(db, data_model)
+    except matview_service.MatviewError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    return data_model
