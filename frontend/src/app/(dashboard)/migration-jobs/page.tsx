@@ -193,6 +193,29 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+// prompt 11: live streaming-progress helpers for the Migration Jobs row (FE-only, English-only).
+// `formatDuration` renders a whole number of seconds as the largest two units (e.g. "2m 05s", "1h 03m");
+// `formatRelativePast` turns an ISO timestamp + the 1s client clock into "3m 05s ago" / "just now".
+function formatDuration(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${String(m % 60).padStart(2, "0")}m`;
+  const d = Math.floor(h / 24);
+  return `${d}d ${String(h % 24).padStart(2, "0")}h`;
+}
+
+function formatRelativePast(value: string | null | undefined, nowMs: number): string {
+  if (!value) return "never";
+  const t = new Date(value).getTime();
+  if (Number.isNaN(t)) return "never";
+  const diffSec = Math.round((nowMs - t) / 1000);
+  if (diffSec < 5) return "just now";
+  return `${formatDuration(diffSec)} ago`;
+}
+
 function toDateTimeInput(value?: string | null): string {
   if (!value) return "";
   const date = new Date(value);
@@ -495,6 +518,74 @@ function StreamSwitch({
   );
 }
 
+// prompt 11: per-row streaming progress for the Migration Jobs table. For an ENABLED table it shows the
+// live countdown to the next streaming cycle (next-run = last_run_at + poll_interval_sec) on top of the
+// relative last-run time (absolute time in the tooltip); a status dot reflects the last run (ok/error).
+// `nowMs` is the page's shared 1s clock (0 until mounted -> SSR-safe). Disabled / no-config rows render
+// an em dash. No data is fetched here — it reads the already-loaded streaming config (prompt 06).
+function StreamProgressCell({ cfg, nowMs }: { cfg: StreamingTable | undefined; nowMs: number }) {
+  if (!cfg || !cfg.enabled) {
+    return (
+      <span className="text-neutral-300" title={cfg ? "Streaming is off for this table" : "No streaming config"}>
+        &mdash;
+      </span>
+    );
+  }
+  const mounted = nowMs > 0;
+  const lastIso = cfg.last_run_at;
+  const lastMs = lastIso ? new Date(lastIso).getTime() : NaN; // parse once; NaN (null or unparseable) = no run
+  const hasLast = !Number.isNaN(lastMs);
+  const lastAbs = hasLast ? new Date(lastMs).toLocaleString() : "Never streamed yet";
+  const lastRel = !hasLast ? "never" : mounted ? formatRelativePast(lastIso, nowMs) : "…";
+
+  // next-run countdown: pending until the first run; "due / waiting" once the scheduled time has passed
+  // (the streaming loop wakes on its own interval, so it may sit a little past due). Gated on hasLast so a
+  // missing/invalid last_run_at stays consistent with the last-run line (both read "never" / "pending").
+  let nextText = "pending";
+  let nextTone = "text-neutral-500";
+  if (hasLast) {
+    if (!mounted) {
+      nextText = "…";
+      nextTone = "text-neutral-400";
+    } else {
+      const remainingSec = Math.round(
+        (lastMs + Math.max(0, cfg.poll_interval_sec) * 1000 - nowMs) / 1000,
+      );
+      if (remainingSec > 0) {
+        nextText = `in ${formatDuration(remainingSec)}`;
+        nextTone = "text-neutral-700";
+      } else {
+        nextText = "due / waiting";
+        nextTone = "text-warning";
+      }
+    }
+  }
+
+  const status = (cfg.last_status || "").toLowerCase();
+  const dotClass =
+    cfg.last_error || status === "error" || status === "failed"
+      ? "bg-danger"
+      : status === "ok" || status === "success"
+        ? "bg-success"
+        : "bg-neutral-300";
+  const dotTitle = cfg.last_error || (cfg.last_status ? `Last run: ${cfg.last_status}` : "No run recorded yet");
+
+  return (
+    <div className="flex flex-col gap-0.5 text-xs leading-tight">
+      <span
+        className="inline-flex items-center gap-1.5"
+        title={`Next streaming cycle (every ${formatDuration(cfg.poll_interval_sec)})`}
+      >
+        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotClass)} title={dotTitle} />
+        <span className={nextTone}>{nextText}</span>
+      </span>
+      <span className="text-neutral-400" title={lastAbs}>
+        last {lastRel}
+      </span>
+    </div>
+  );
+}
+
 // prompt 08: a clickable, sort-aware table header (arrow shows the active sort direction).
 function SortableTH({
   label,
@@ -626,6 +717,24 @@ export default function MigrationJobsPage() {
 
   useEffect(() => {
     void loadStreamCfgs();
+  }, [loadStreamCfgs]);
+
+  // prompt 11: one shared 1s clock drives every row's next-run countdown (kept in the page so all rows
+  // tick together; starts at 0 so the first server render and hydration match, then the mount effect sets
+  // the real time). Plus a ~20s refetch of the streaming config so last-run / status stay live after a
+  // streaming cycle. Reuses loadStreamCfgs + the existing streamCfgs state — no extra fetch loop, no extra
+  // state. Both intervals are cleared on unmount.
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => {
+    setNowMs(Date.now());
+    const tick = setInterval(() => setNowMs(Date.now()), 1000);
+    const refetch = setInterval(() => {
+      void loadStreamCfgs();
+    }, 20000);
+    return () => {
+      clearInterval(tick);
+      clearInterval(refetch);
+    };
   }, [loadStreamCfgs]);
 
   // A table "would full-reload" when it has no usable upsert key (no watermark, or a date marker with
@@ -761,7 +870,7 @@ export default function MigrationJobsPage() {
     );
 
   // Sort (client-side over the loaded jobs).
-  type SortKey = "name" | "watermark" | "load_mode" | "status" | "latest_run" | "rows";
+  type SortKey = "name" | "watermark" | "load_mode" | "status" | "latest_run" | "next_run" | "rows";
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const toggleSort = (k: SortKey) => {
@@ -786,6 +895,15 @@ export default function MigrationJobsPage() {
           return o?.source_verdict || j.status || "";
         case "latest_run":
           return j.last_run_at || o?.last_run_at || "";
+        case "next_run": {
+          // prompt 11: sort by the ABSOLUTE next-run instant (stable across the 1s tick, so the table
+          // does not reshuffle every second). Off / no-config rows sort last; enabled-but-never-run
+          // (pending) sort just before them.
+          const c = streamCfgs[j.target_table];
+          if (!c || !c.enabled) return Number.MAX_SAFE_INTEGER;
+          if (!c.last_run_at) return Number.MAX_SAFE_INTEGER - 1;
+          return new Date(c.last_run_at).getTime() + Math.max(0, c.poll_interval_sec) * 1000;
+        }
         case "rows":
           return j.latest_target_row_count ?? o?.current_rows ?? -1;
         default:
@@ -798,7 +916,7 @@ export default function MigrationJobsPage() {
       const c = va < vb ? -1 : va > vb ? 1 : 0;
       return sortDir === "asc" ? c : -c;
     });
-  }, [jobs, sortKey, sortDir, oraByTarget]);
+  }, [jobs, sortKey, sortDir, oraByTarget, streamCfgs]);
 
   // ⚙ drawer: tabbed (Config / Migration / Streaming). Opening loads the job into the edit form.
   const [drawerTab, setDrawerTab] = useState<string>("config");
@@ -1516,6 +1634,7 @@ export default function MigrationJobsPage() {
                 <col className="w-[105px]" />
                 <col className="w-[150px]" />
                 <col className="w-[95px]" />
+                <col className="w-[150px]" />
                 <col className="w-[105px]" />
                 <col className="w-[90px]" />
               </colgroup>
@@ -1538,6 +1657,7 @@ export default function MigrationJobsPage() {
                   <SortableTH label="Load Mode" k="load_mode" active={sortKey === "load_mode"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
                   <SortableTH label="Status / Verify" k="status" active={sortKey === "status"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
                   <TH>Streaming</TH>
+                  <SortableTH label="Streaming progress" k="next_run" active={sortKey === "next_run"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
                   <SortableTH label="Latest Run" k="latest_run" active={sortKey === "latest_run"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
                   <SortableTH label="Rows" k="rows" active={sortKey === "rows"} dir={sortDir} onSort={(k) => toggleSort(k as SortKey)} />
                 </TR>
@@ -1625,6 +1745,9 @@ export default function MigrationJobsPage() {
                             </div>
                           );
                         })()}
+                      </TD>
+                      <TD>
+                        <StreamProgressCell cfg={cfg} nowMs={nowMs} />
                       </TD>
                       <TD>
                         <Badge tone={badgeTone(job.latest_run_status || ora?.last_run_status)}>
