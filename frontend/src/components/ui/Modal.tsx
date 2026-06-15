@@ -12,6 +12,20 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 let modalStackSeq = 0;
 const MODAL_BASE_Z = 50;
 
+// prompt 19: opt-in width scale. Omitting `size` (or size="md") renders max-w-lg — the EXACT previous
+// hard-coded default — so every existing confirm/form modal is pixel-identical and nothing small breaks.
+// `xl` (max-w-6xl ≈ 1152px) is the wide tier for multi-tab drawers + wide tables; it replaces the ad-hoc
+// `.data-model-dialog` CSS hack (width:min(92vw,1100px) !important) and is ≥ that width, so content modals
+// that move onto it get at least as much room as before. Body keeps max-h-[92vh] + overflow-y-auto and the
+// panel stays `w-full` → narrow viewports shrink responsively to the viewport (minus the p-4 gutter).
+const MODAL_SIZES = {
+  sm: "max-w-md", // ≈448px — tight confirms
+  md: "max-w-lg", // ≈512px — the previous default (standard forms / confirms)
+  lg: "max-w-3xl", // ≈768px — content-rich forms (side-by-side grids)
+  xl: "max-w-6xl", // ≈1152px — multi-tab drawers + wide tables
+} as const;
+type ModalSize = keyof typeof MODAL_SIZES;
+
 // NOTE: the focus + Escape effects below depend ONLY on `open`. Depending on `onClose`
 // (usually an inline arrow) made the effect re-run on every parent re-render — i.e. every
 // keystroke in a form field — which called panel.focus() and stole focus from the input
@@ -25,6 +39,7 @@ export function Modal({
   children,
   footer,
   className,
+  size = "md",
 }: {
   open: boolean;
   onClose: () => void;
@@ -32,6 +47,8 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  /** Width tier (prompt 19). Default "md" = max-w-lg, identical to the previous fixed width. */
+  size?: ModalSize;
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -82,7 +99,8 @@ export function Modal({
         ref={panelRef}
         tabIndex={-1}
         className={cn(
-          "relative z-10 flex max-h-[92vh] w-full max-w-lg flex-col rounded-lg bg-white shadow-xl outline-none",
+          "relative z-10 flex max-h-[92vh] w-full flex-col rounded-lg bg-white shadow-xl outline-none",
+          MODAL_SIZES[size],
           className,
         )}
       >

@@ -2301,7 +2301,8 @@ export default function MigrationJobsPage() {
         open={templateOpen}
         onClose={() => setTemplateOpen(false)}
         title="Create Migration Job from Template"
-        className="data-model-dialog overflow-hidden"
+        size="xl"
+        className="overflow-hidden"
         footer={
           <>
             <Button variant="ghost" onClick={() => setTemplateOpen(false)}>Cancel</Button>
@@ -2319,7 +2320,8 @@ export default function MigrationJobsPage() {
         open={jobMode !== null}
         onClose={() => setJobMode(null)}
         title={jobMode === "edit" ? "Edit Migration Job" : "New Migration Job"}
-        className="data-model-dialog overflow-hidden"
+        size="xl"
+        className="overflow-hidden"
         footer={
           <>
             <Button variant="ghost" onClick={() => setJobMode(null)}>Cancel</Button>
@@ -2341,7 +2343,8 @@ export default function MigrationJobsPage() {
         open={runMode !== null}
         onClose={() => setRunMode(null)}
         title={runMode === "view" ? "View Migration Run" : runMode === "edit" ? "Edit Migration Run" : "New Migration Run"}
-        className="data-model-dialog overflow-hidden"
+        size="xl"
+        className="overflow-hidden"
         footer={
           runMode === "view" ? (
             <>
@@ -2368,7 +2371,8 @@ export default function MigrationJobsPage() {
         open={streamingJob !== null}
         onClose={() => { setStreamingJob(null); void loadStreamCfgs(); void loadOra(); void reloadJobs(); }}
         title={streamingJob ? `${streamingJob.name} - ${streamingJob.target_table}` : ""}
-        className="data-model-dialog overflow-hidden"
+        size="xl"
+        className="overflow-hidden"
         footer={<Button variant="ghost" onClick={() => { setStreamingJob(null); void loadStreamCfgs(); void loadOra(); void reloadJobs(); }}>Close</Button>}
       >
         {streamingJob && (

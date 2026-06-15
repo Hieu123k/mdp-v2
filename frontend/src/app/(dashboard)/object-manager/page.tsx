@@ -1542,7 +1542,8 @@ export default function DataModelsPage() {
         open={templateOpen}
         onClose={() => setTemplateOpen(false)}
         title="Create Data Model from Template"
-        className="data-model-dialog overflow-hidden"
+        size="xl"
+        className="overflow-hidden"
         footer={
           <>
             <Button variant="ghost" onClick={() => setTemplateOpen(false)}>Cancel</Button>
@@ -1562,7 +1563,8 @@ export default function DataModelsPage() {
         open={mode !== null && mode !== "preview"}
         onClose={() => setMode(null)}
         title={modalTitle}
-        className="data-model-dialog overflow-hidden"
+        size="xl"
+        className="overflow-hidden"
         footer={
           mode === "view" ? (
             <>
@@ -1612,7 +1614,8 @@ export default function DataModelsPage() {
         open={mode === "preview"}
         onClose={() => setMode(null)}
         title="Preview Data Model"
-        className="data-model-dialog overflow-hidden"
+        size="xl"
+        className="overflow-hidden"
         footer={
           <>
             <Button variant="ghost" onClick={() => setMode(null)}>Close</Button>

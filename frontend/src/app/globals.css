@@ -76,17 +76,3 @@
     animation: none;
   }
 }
-
-.data-model-dialog {
-  width: min(92vw, 1100px) !important;
-  max-width: 1100px !important;
-  min-width: min(900px, 96vw);
-  max-height: 92vh;
-}
-
-@media (max-width: 900px) {
-  .data-model-dialog {
-    width: 96vw !important;
-    min-width: 0;
-  }
-}

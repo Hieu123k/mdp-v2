@@ -235,6 +235,7 @@ export default function ConnectionsPage() {
         open={open}
         onClose={() => setOpen(false)}
         title="New Connection"
+        size="lg"
         footer={
           <>
             <Button variant="ghost" onClick={() => setOpen(false)}>

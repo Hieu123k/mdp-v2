@@ -333,7 +333,7 @@ export function StreamingEditor({ filterTarget }: { filterTarget?: string } = {}
                               value={d.ts_kind}
                               disabled={busy === t.source_view}
                               onChange={(e) => setDraft(t.source_view, { ts_kind: e.target.value })}
-                              className="max-w-[7rem]"
+                              className="max-w-[9rem]"
                             >
                               <option value="date">date (Julian)</option>
                               <option value="sequence">sequence (id)</option>
@@ -417,7 +417,7 @@ export function StreamingEditor({ filterTarget }: { filterTarget?: string } = {}
                           type="number"
                           min={minInt}
                           value={d.poll_interval_sec}
-                          className="max-w-[7rem]"
+                          className="min-w-[6rem] text-right"
                           onChange={(e) =>
                             setDraft(t.source_view, { poll_interval_sec: Math.max(minInt, Number(e.target.value) || minInt) })
                           }
