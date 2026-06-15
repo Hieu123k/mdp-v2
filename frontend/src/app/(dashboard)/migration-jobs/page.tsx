@@ -8,7 +8,6 @@ import {
   ChevronUp,
   Download,
   Eye,
-  History,
   ListChecks,
   PlayCircle,
   Power,
@@ -993,11 +992,23 @@ export default function MigrationJobsPage() {
   const [bulkSyncing, setBulkSyncing] = useState(false);
 
   const syncOne = useCallback(
-    async (table: string): Promise<{ ok: boolean; rowsAdded: number | null; error: string | null }> => {
+    async (
+      table: string,
+    ): Promise<{ ran: boolean; rowsAdded: number | null; runError: string | null; verified: boolean; verifyError: string | null }> => {
       const r = await streamingRunOnce(table); // run-once (force; ignores `enabled`)
-      if (!r.ok) return { ok: false, rowsAdded: r.rows_added, error: r.error };
-      await ora2pgVerify(table); // then exact Verify → refreshes the saved verdict
-      return { ok: true, rowsAdded: r.rows_added, error: null };
+      // prompt 17: ALWAYS Verify after run-once — even if the source pull errored — so the verdict is
+      // computed and never left silently at "Awaiting Verify" (the F4111 gap: a failed/slow huge full-reload
+      // used to skip Verify entirely). The exact COUNT can be slow on a big table; the caller shows a
+      // "Verifying…" state and, if it doesn't finish, a clear "click Verify" fallback.
+      let verified = false;
+      let verifyError: string | null = null;
+      try {
+        await ora2pgVerify(table);
+        verified = true;
+      } catch (e) {
+        verifyError = errorMessage(e);
+      }
+      return { ran: r.ok, rowsAdded: r.rows_added, runError: r.ok ? null : r.error, verified, verifyError };
     },
     [],
   );
@@ -1016,20 +1027,23 @@ export default function MigrationJobsPage() {
       }
       setSyncing(table);
       setPageError(null);
-      setNotice(null);
+      setNotice(`Syncing ${table}… run-once, then Verify (an exact count — can take a while on large tables).`);
       try {
         const r = await syncOne(table);
-        if (r.ok) {
-          setNotice(`Synced ${table}: +${r.rowsAdded ?? 0} row(s); verdict refreshed.`);
+        const pull = r.ran ? `+${r.rowsAdded ?? 0} row(s) pulled` : `source pull did not run (${r.runError ?? "error"})`;
+        if (r.verified) {
+          setNotice(`Synced ${table}: ${pull}; verdict refreshed (see Status / Verify).`);
         } else {
-          const hint =
-            r.error && /(exit\s*2|already|running|in progress|lock)/i.test(r.error)
-              ? " — a reload may be in progress; try again shortly."
-              : "";
-          setPageError(`Sync failed for ${table}: ${r.error ?? "run-once error"}${hint}`);
+          // Verify did not finish (large table / timeout) — never leave the verdict silently PENDING.
+          setNotice(null);
+          setPageError(
+            `${table}: ${pull}, but Verify did not finish (large table?): ${r.verifyError ?? "verify error"}. ` +
+              `Click the Verify (✓) button to update the verdict.`,
+          );
         }
         await loadOra();
       } catch (e) {
+        setNotice(null);
         setPageError(`Sync failed for ${table}: ${errorMessage(e)}`);
       } finally {
         setSyncing(null);
@@ -1072,7 +1086,7 @@ export default function MigrationJobsPage() {
       setSyncing(table);
       try {
         const r = await syncOne(table);
-        if (r.ok) okCount += 1;
+        if (r.verified) okCount += 1; // verdict computed (the run-once may have pulled 0/failed, but Verify ran)
         else failed.push(table);
       } catch {
         failed.push(table);
@@ -1082,7 +1096,7 @@ export default function MigrationJobsPage() {
     setBulkSyncing(false);
     await loadOra();
     setNotice(
-      `Synced ${okCount}/${tables.length} table(s)${failed.length ? `; failed: ${failed.join(", ")}` : ""}.`,
+      `Synced ${okCount}/${tables.length} table(s): verdict refreshed${failed.length ? `; Verify did not finish for: ${failed.join(", ")}` : ""}.`,
     );
   }, [verifySel, jobs, oraByTarget, streamCfgs, loadOra, syncOne, syncing, bulkSyncing]);
 
@@ -1202,8 +1216,12 @@ export default function MigrationJobsPage() {
 
   // ⚙ drawer: tabbed (Config / Migration / Streaming). Opening loads the job into the edit form.
   const [drawerTab, setDrawerTab] = useState<string>("config");
+  // prompt 17: the Migration tab's sub-sections render INLINE in the drawer (no nested modal that would
+  // render UNDER the drawer): "main" = ora2pg/Verify dashboard, "details" = job detail, "runs" = run history.
+  const [migSection, setMigSection] = useState<"main" | "details" | "runs">("main");
   async function openDrawer(job: MigrationJob) {
     setDrawerTab("config");
+    setMigSection("main");
     setStreamingJob(job);
     try {
       const detail = await getMigrationJob(job.id);
@@ -1338,6 +1356,9 @@ export default function MigrationJobsPage() {
     }
   }
 
+  // prompt 17: retained (the standalone Edit Job modal is still rendered) but no longer wired from the
+  // inline "View details" — editing now happens in the drawer Config tab. Kept like openCreateJob.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function openEditJob(job: MigrationJob) {
     setBusy(true);
     setModalError(null);
@@ -2310,114 +2331,11 @@ export default function MigrationJobsPage() {
         {renderJobForm(false)}
       </Modal>
 
-      <Modal
-        open={viewJob !== null}
-        onClose={() => setViewJob(null)}
-        title="View Migration Job"
-        className="data-model-dialog overflow-hidden"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setViewJob(null)}>Close</Button>
-            {viewJob && <Button onClick={() => { const job = viewJob; setViewJob(null); openEditJob(job); }}>Edit Job</Button>}
-          </>
-        }
-      >
-        {viewJob && (
-          <div className="space-y-4">
-            <Section title="Overview">
-              <DetailGrid items={[
-                ["Name", viewJob.name],
-                ["Description", viewJob.description],
-                ["Status", viewJob.status],
-                ["Source System", viewJob.source_system],
-                ["Migration Tool", viewJob.migration_tool],
-                ["Load Mode", titleize(viewJob.load_mode)],
-              ]} />
-            </Section>
-            <Section title="Source">
-              <DetailGrid items={[
-                ["Source Type", viewJob.source_type],
-                ["Source Connection", viewJob.source_connection_id],
-                ["Source Schema", viewJob.source_schema],
-                ["Source Table", viewJob.source_table],
-              ]} />
-            </Section>
-            <Section title="Target">
-              <DetailGrid items={[
-                ["Target Schema", viewJob.target_schema],
-                ["Target Table", viewJob.target_table],
-                ["Primary Key Columns", viewJob.primary_key_columns],
-                ["Estimated Rows", viewJob.estimated_rows],
-                ["Estimated Size GB", viewJob.estimated_size_gb],
-              ]} />
-            </Section>
-            <Section title="Migration Scope & Incremental Control">
-              <DetailGrid items={[
-                ["Initial Load Strategy", titleize(viewJob.initial_load_strategy)],
-                ["Max Rows Per Run", viewJob.max_rows_per_run],
-                ["Time Window Column", viewJob.time_window_column],
-                ["Time Window Type", titleize(viewJob.time_window_column_type)],
-                ["Time Window Start", viewJob.time_window_start],
-                ["Time Window End", viewJob.time_window_end],
-                ["Incremental Strategy", titleize(viewJob.incremental_strategy)],
-                ["Watermark Column", viewJob.watermark_column],
-                ["Watermark Type", titleize(viewJob.watermark_column_type)],
-                ["Lookback Days", viewJob.lookback_window_days],
-                ["Lookback Minutes", viewJob.lookback_window_minutes],
-              ]} />
-            </Section>
-            <Section title="Watermark & Latest Run">
-              <DetailGrid items={[
-                ["Last Run At", formatDate(viewJob.last_run_at)],
-                ["Last Successful Run At", formatDate(viewJob.last_successful_run_at)],
-                ["Last Successful Watermark", viewJob.last_successful_watermark],
-                ["Validation Level", titleize(viewJob.validation_level)],
-                ["Incremental Strategy", titleize(viewJob.incremental_strategy)],
-              ]} />
-            </Section>
-            <Section title="Config">
-              <pre className="max-h-72 overflow-auto rounded-md bg-neutral-950 p-3 text-xs text-neutral-50">
-                {prettyJson(viewJob.config) || "-"}
-              </pre>
-            </Section>
-            <Section title="Latest Runs" subtitle="Latest 3 run records">
-              {viewRuns.length === 0 ? (
-                <p className="text-sm text-neutral-500">No runs recorded yet.</p>
-              ) : (
-                <RunTable runs={viewRuns} onView={openViewRun} onEdit={openEditRun} onValidate={validateRun} busy={busy} />
-              )}
-            </Section>
-          </div>
-        )}
-      </Modal>
-
-      <Modal
-        open={runsJob !== null}
-        onClose={() => setRunsJob(null)}
-        title={runsJob ? `Run History - ${runsJob.name}` : "Run History"}
-        className="data-model-dialog overflow-hidden"
-      >
-        {modalError && <p className="mb-4 rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{modalError}</p>}
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-neutral-600">
-              Record ora2pg or external-loader output here. MDP keeps the history and validates the PostgreSQL target.
-            </p>
-            <Button size="sm" onClick={openCreateRun}>
-              <PlayCircle size={15} />
-              New Run Record
-            </Button>
-          </div>
-          {validation && <ValidationPanel validation={validation} />}
-          {runs.length === 0 ? (
-            <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-4 text-sm text-neutral-500">
-              No migration runs have been recorded.
-            </p>
-          ) : (
-            <RunTable runs={runs} onView={openViewRun} onEdit={openEditRun} onValidate={validateRun} busy={busy} />
-          )}
-        </div>
-      </Modal>
+      {/* prompt 17: the "View Migration Job" + "Run History" modals were removed — their content now
+          renders INLINE inside the ⚙ drawer's Migration sub-tabs (above), so they no longer stack under
+          the drawer. The viewJob / viewRuns / runsJob / runs / validation state is reused by the inline
+          render; openViewJob / openRuns still load it. The run view/edit + edit-job modals below stay, and
+          the Modal stacking-level fix keeps them floating above the drawer. */}
 
       <Modal
         open={runMode !== null}
@@ -2484,20 +2402,129 @@ export default function MigrationJobsPage() {
             )}
             {drawerTab === "migration" && (
               <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => openViewJob(streamingJob)} disabled={busy}>
-                    <Eye size={14} /> View details
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={() => openRuns(streamingJob)} disabled={busy}>
-                    <History size={14} /> Run history
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={() => validateLatest(streamingJob)} disabled={busy}>
-                    <ShieldCheck size={14} /> Validate target
-                  </Button>
-                </div>
-                <div className="max-w-full overflow-x-auto">
-                  <Ora2pgMigrationDashboard filterTable={oraByTarget[streamingJob.target_table]?.table} />
-                </div>
+                {/* prompt 17: View details / Run history / Validate target render INLINE here (sub-tabs in
+                    the scrollable drawer body) instead of opening a separate Modal that stacked UNDER the
+                    drawer. Switching to a sub-tab loads its data (reusing openViewJob / openRuns). */}
+                <Tabs
+                  tabs={[
+                    { key: "main", label: "ora2pg / Verify" },
+                    { key: "details", label: "View details" },
+                    { key: "runs", label: "Run history" },
+                  ]}
+                  active={migSection}
+                  onChange={(k) => {
+                    const key = k as "main" | "details" | "runs";
+                    setMigSection(key);
+                    if (key === "details") void openViewJob(streamingJob);
+                    if (key === "runs") void openRuns(streamingJob);
+                  }}
+                />
+                {migSection === "main" && (
+                  <div className="max-w-full overflow-x-auto">
+                    <Ora2pgMigrationDashboard filterTable={oraByTarget[streamingJob.target_table]?.table} />
+                  </div>
+                )}
+                {migSection === "details" && (
+                  !viewJob ? (
+                    <p className="text-sm text-neutral-400">Loading details…</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <Section title="Overview">
+                        <DetailGrid items={[
+                          ["Name", viewJob.name],
+                          ["Description", viewJob.description],
+                          ["Status", viewJob.status],
+                          ["Source System", viewJob.source_system],
+                          ["Migration Tool", viewJob.migration_tool],
+                          ["Load Mode", titleize(viewJob.load_mode)],
+                        ]} />
+                      </Section>
+                      <Section title="Source">
+                        <DetailGrid items={[
+                          ["Source Type", viewJob.source_type],
+                          ["Source Connection", viewJob.source_connection_id],
+                          ["Source Schema", viewJob.source_schema],
+                          ["Source Table", viewJob.source_table],
+                        ]} />
+                      </Section>
+                      <Section title="Target">
+                        <DetailGrid items={[
+                          ["Target Schema", viewJob.target_schema],
+                          ["Target Table", viewJob.target_table],
+                          ["Primary Key Columns", viewJob.primary_key_columns],
+                          ["Estimated Rows", viewJob.estimated_rows],
+                          ["Estimated Size GB", viewJob.estimated_size_gb],
+                        ]} />
+                      </Section>
+                      <Section title="Migration Scope & Incremental Control">
+                        <DetailGrid items={[
+                          ["Initial Load Strategy", titleize(viewJob.initial_load_strategy)],
+                          ["Max Rows Per Run", viewJob.max_rows_per_run],
+                          ["Time Window Column", viewJob.time_window_column],
+                          ["Time Window Type", titleize(viewJob.time_window_column_type)],
+                          ["Time Window Start", viewJob.time_window_start],
+                          ["Time Window End", viewJob.time_window_end],
+                          ["Incremental Strategy", titleize(viewJob.incremental_strategy)],
+                          ["Watermark Column", viewJob.watermark_column],
+                          ["Watermark Type", titleize(viewJob.watermark_column_type)],
+                          ["Lookback Days", viewJob.lookback_window_days],
+                          ["Lookback Minutes", viewJob.lookback_window_minutes],
+                        ]} />
+                      </Section>
+                      <Section title="Watermark & Latest Run">
+                        <DetailGrid items={[
+                          ["Last Run At", formatDate(viewJob.last_run_at)],
+                          ["Last Successful Run At", formatDate(viewJob.last_successful_run_at)],
+                          ["Last Successful Watermark", viewJob.last_successful_watermark],
+                          ["Validation Level", titleize(viewJob.validation_level)],
+                          ["Incremental Strategy", titleize(viewJob.incremental_strategy)],
+                        ]} />
+                      </Section>
+                      <Section title="Config">
+                        <pre className="max-h-72 overflow-auto rounded-md bg-neutral-950 p-3 text-xs text-neutral-50">
+                          {prettyJson(viewJob.config) || "-"}
+                        </pre>
+                      </Section>
+                      <Section title="Latest Runs" subtitle="Latest 3 run records">
+                        {viewRuns.length === 0 ? (
+                          <p className="text-sm text-neutral-500">No runs recorded yet.</p>
+                        ) : (
+                          <RunTable runs={viewRuns} onView={openViewRun} onEdit={openEditRun} onValidate={validateRun} busy={busy} />
+                        )}
+                      </Section>
+                      <div className="flex justify-end">
+                        <Button variant="secondary" size="sm" onClick={() => setDrawerTab("config")}>
+                          <SquarePen size={14} /> Edit in Config tab
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                )}
+                {migSection === "runs" && (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm text-neutral-600">
+                        Record ora2pg / external-loader output here. MDP keeps the history and validates the target.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button variant="secondary" size="sm" onClick={() => validateLatest(streamingJob)} disabled={busy}>
+                          <ShieldCheck size={14} /> Validate target
+                        </Button>
+                        <Button size="sm" onClick={openCreateRun} disabled={busy}>
+                          <PlayCircle size={15} /> New Run Record
+                        </Button>
+                      </div>
+                    </div>
+                    {validation && <ValidationPanel validation={validation} />}
+                    {runs.length === 0 ? (
+                      <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-4 text-sm text-neutral-500">
+                        No migration runs have been recorded.
+                      </p>
+                    ) : (
+                      <RunTable runs={runs} onView={openViewRun} onEdit={openEditRun} onValidate={validateRun} busy={busy} />
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {drawerTab === "streaming" && (

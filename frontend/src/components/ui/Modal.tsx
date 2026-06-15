@@ -2,7 +2,15 @@
 
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+
+// prompt 17: a monotonic counter so a modal opened LATER (incl. a modal opened from inside another modal)
+// always gets a higher z-index than the ones before it — regardless of DOM render order. This kills the
+// "nested modal renders UNDER the modal that spawned it" class of bug (all modals used to share z-50, so
+// only DOM order decided stacking). Monotonic → never reused → the most-recently-opened modal is always on
+// top, with its own overlay dimming the ones beneath.
+let modalStackSeq = 0;
+const MODAL_BASE_Z = 50;
 
 // NOTE: the focus + Escape effects below depend ONLY on `open`. Depending on `onClose`
 // (usually an inline arrow) made the effect re-run on every parent re-render — i.e. every
@@ -30,6 +38,14 @@ export function Modal({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  // Claim the next stacking slot each time this modal opens, so it floats above any already-open modal.
+  const [zIndex, setZIndex] = useState(MODAL_BASE_Z);
+  useEffect(() => {
+    if (!open) return;
+    modalStackSeq += 1;
+    setZIndex(MODAL_BASE_Z + modalStackSeq * 10);
+  }, [open]);
+
   // Focus the panel once when it opens; restore focus on close. Runs ONLY on open-change.
   useEffect(() => {
     if (!open) return;
@@ -54,7 +70,8 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ zIndex }}
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? titleId : undefined}
