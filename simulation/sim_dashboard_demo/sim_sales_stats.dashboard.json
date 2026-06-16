@@ -1,0 +1,746 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Path A - Postgres (grafana_ro) reads matview mdp_models.sim_sales_360 (server-side SQL aggregate)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT (round((sum(amount) filter (where status='paid'))::numeric,2))::float8 AS \"Paid Revenue\", count(*)::int AS \"Invoices\", (round(avg(amount)::numeric,2))::float8 AS \"Avg Amount\", count(distinct customer_id)::int AS \"Customers\" FROM mdp_models.sim_sales_360;",
+          "refId": "A"
+        }
+      ],
+      "title": "KPI: Paid Revenue / Invoices / Avg Amount / Customers (SQL)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 5
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "xField": "region"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT region, (round((sum(amount) filter (where status='paid'))::numeric,2))::float8 AS revenue FROM mdp_models.sim_sales_360 GROUP BY region ORDER BY revenue DESC;",
+          "refId": "A"
+        }
+      ],
+      "title": "Revenue by Region (paid)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 5
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value"
+          ]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT segment, (round((sum(amount) filter (where status='paid'))::numeric,2))::float8 AS revenue FROM mdp_models.sim_sales_360 GROUP BY segment ORDER BY revenue DESC;",
+          "refId": "A"
+        }
+      ],
+      "title": "Revenue by Segment (paid)",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 5
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT status, count(*)::int AS invoices FROM mdp_models.sim_sales_360 GROUP BY status ORDER BY status;",
+          "refId": "A"
+        }
+      ],
+      "title": "Invoice Status Ratio",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 13
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT issued_date::timestamp AS \"time\", (round((sum(amount) filter (where status='paid'))::numeric,2))::float8 AS revenue FROM mdp_models.sim_sales_360 GROUP BY issued_date ORDER BY issued_date;",
+          "refId": "A"
+        }
+      ],
+      "title": "Paid Revenue by Issued Date",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 13
+      },
+      "id": 7,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT customer_name, (round((sum(amount) filter (where status='paid'))::numeric,2))::float8 AS paid_revenue, count(*)::int AS invoices FROM mdp_models.sim_sales_360 GROUP BY customer_name ORDER BY paid_revenue DESC LIMIT 10;",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 Customers by Paid Revenue",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "id": 8,
+      "title": "Path B - Infinity reads GET /api/outbound/sim_sales_360 (read-through; client-side aggregate)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "mdp_out_sim"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "amount",
+              "text": "amount",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "mdp_out_sim"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/sim_sales_360?status=paid&limit=500",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "KPI: Paid Revenue (sum) via outbound API",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "mdp_out_sim"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 26
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "xField": "region"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "region",
+              "text": "region",
+              "type": "string"
+            },
+            {
+              "selector": "amount",
+              "text": "amount",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "mdp_out_sim"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/sim_sales_360?status=paid&limit=500",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Revenue by Region (paid)",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "amount": {
+                "aggregations": [
+                  "sum"
+                ],
+                "operation": "aggregate"
+              },
+              "region": {
+                "aggregations": [],
+                "operation": "groupby"
+              }
+            }
+          }
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "mdp_out_sim"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 26
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value"
+          ]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        }
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "segment",
+              "text": "segment",
+              "type": "string"
+            },
+            {
+              "selector": "amount",
+              "text": "amount",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "mdp_out_sim"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/sim_sales_360?status=paid&limit=500",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Revenue by Segment (paid)",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "amount": {
+                "aggregations": [
+                  "sum"
+                ],
+                "operation": "aggregate"
+              },
+              "segment": {
+                "aggregations": [],
+                "operation": "groupby"
+              }
+            }
+          }
+        }
+      ],
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "mdp_out_sim"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 26
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        }
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "status",
+              "text": "status",
+              "type": "string"
+            },
+            {
+              "selector": "invoice_no",
+              "text": "invoice_no",
+              "type": "string"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "mdp_out_sim"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/sim_sales_360?limit=500",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Invoice Status Ratio",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "invoice_no": {
+                "aggregations": [
+                  "count"
+                ],
+                "operation": "aggregate"
+              },
+              "status": {
+                "aggregations": [],
+                "operation": "groupby"
+              }
+            }
+          }
+        }
+      ],
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "mdp_out_sim"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 34
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "issued_date",
+              "text": "issued_date",
+              "type": "timestamp"
+            },
+            {
+              "selector": "amount",
+              "text": "amount",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "mdp_out_sim"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/sim_sales_360?status=paid&limit=500",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Paid Revenue by Issued Date",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "amount": {
+                "aggregations": [
+                  "sum"
+                ],
+                "operation": "aggregate"
+              },
+              "issued_date": {
+                "aggregations": [],
+                "operation": "groupby"
+              }
+            }
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "mdp_out_sim"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 34
+      },
+      "id": 14,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "customer_name",
+              "text": "customer_name",
+              "type": "string"
+            },
+            {
+              "selector": "amount",
+              "text": "amount",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "mdp_out_sim"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/sim_sales_360?status=paid&limit=500",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Top 10 Customers by Paid Revenue",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "amount": {
+                "aggregations": [
+                  "sum"
+                ],
+                "operation": "aggregate"
+              },
+              "customer_name": {
+                "aggregations": [],
+                "operation": "groupby"
+              }
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "desc": true,
+                "field": "amount (sum)"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [
+    "mdp",
+    "v2",
+    "sim",
+    "demo"
+  ],
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Sales Statistics (sim demo)"
+}
