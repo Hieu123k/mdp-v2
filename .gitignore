@@ -41,6 +41,9 @@ grafana/data/
 # --- Handoff protocol (kept outside the code repo) ---
 handoff/
 
+# --- Agents governance: local-only infra file (never commit) ---
+_agents/INFRA.local.md
+
 # --- IDE / OS ---
 .idea/
 .vscode/
