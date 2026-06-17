@@ -119,6 +119,8 @@ class DataModelBase(BaseModel):
     # prompt 14: per-model Materialized View opt-in (Type B). Off by default → existing read-through
     # behaviour. The refresh metadata (last_refresh_at/duration/row_count) is read-only on DataModelRead.
     matview_enabled: bool = False
+    # prompt 25: auto-refresh cadence in seconds (None/0 = manual; >0 = MatviewRefresher loop refreshes it).
+    matview_refresh_interval_sec: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def validate_model(self) -> "DataModelBase":
@@ -207,6 +209,7 @@ class DataModelUpdate(BaseModel):
     latest_only: bool | None = None
     recency_column: str | None = Field(default=None, max_length=150)
     matview_enabled: bool | None = None
+    matview_refresh_interval_sec: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def validate_partial_names(self) -> "DataModelUpdate":
@@ -229,6 +232,8 @@ class DataModelRead(DataModelBase):
     matview_refresh_duration_sec: float | None = None
     matview_row_count: int | None = None
     matview_last_error: str | None = None
+    # prompt 25: status of the last (auto/manual) refresh — "ok" | "error".
+    matview_last_refresh_status: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

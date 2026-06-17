@@ -121,6 +121,9 @@ type FormState = {
   // Type B "latest version only" dedup (prompt 50). recency_column matters only when latest_only.
   latest_only: boolean;
   recency_column: string;
+  // matview (prompt 14 + 25): Type B materialized-view opt-in + auto-refresh cadence (null/0 = manual).
+  matview_enabled: boolean;
+  matview_refresh_interval_sec: number | null;
 };
 
 type TemplateForm = {
@@ -182,6 +185,8 @@ function initialForm(): FormState {
     relationships: [],
     latest_only: false,
     recency_column: "updated_at",
+    matview_enabled: false,
+    matview_refresh_interval_sec: null,
   };
 }
 
@@ -237,6 +242,8 @@ function formFromModel(model: DataModel): FormState {
       .map((join) => ({ ...join })),
     latest_only: !!model.latest_only,
     recency_column: model.recency_column || "updated_at",
+    matview_enabled: !!model.matview_enabled,
+    matview_refresh_interval_sec: model.matview_refresh_interval_sec ?? null,
   };
 }
 
@@ -1034,6 +1041,9 @@ export default function DataModelsPage() {
         ? {
             latest_only: form.latest_only,
             recency_column: form.latest_only ? form.recency_column || "updated_at" : null,
+            // matview (prompt 14 + 25): opt-in + auto-refresh cadence (only meaningful when enabled).
+            matview_enabled: form.matview_enabled,
+            matview_refresh_interval_sec: form.matview_enabled ? form.matview_refresh_interval_sec : null,
           }
         : {}),
     };
@@ -1921,6 +1931,7 @@ export default function DataModelsPage() {
         </DrawerSection>
 
         {form.type === "A" ? renderTypeAEditor() : renderTypeBEditor()}
+        {form.type === "B" && renderMatviewEditor()}
         {preview && renderPreviewForResult(preview)}
       </div>
     );
@@ -1934,6 +1945,64 @@ export default function DataModelsPage() {
       >
         {renderAttributesTable(false)}
         <Button size="sm" variant="secondary" onClick={addAttribute} className="mt-3">Add Attribute</Button>
+      </DrawerSection>
+    );
+  }
+
+  // prompt 25: Type B materialized-view opt-in + auto-refresh cadence (the MatviewRefresher loop reads
+  // matview_refresh_interval_sec) + read-only last-refresh status from the loaded model.
+  function renderMatviewEditor() {
+    return (
+      <DrawerSection
+        title="Materialized View (Path A cache + auto-refresh)"
+        subtitle="Materialize this Type B view for fast SQL dashboards. Set an auto-refresh interval and the background MatviewRefresher keeps it fresh — no manual refresh / cron needed."
+      >
+        <label className="flex items-center gap-2 text-sm font-medium text-neutral-700">
+          <input
+            type="checkbox"
+            aria-label="Enable materialized view"
+            checked={form.matview_enabled}
+            onChange={(event) => patchForm({ matview_enabled: event.target.checked })}
+          />
+          Enable materialized view
+        </label>
+        {form.matview_enabled && (
+          <div className="mt-3 grid items-start gap-4 md:grid-cols-2">
+            <Input
+              type="number"
+              min={0}
+              label="Auto-refresh every (s)"
+              hint="0 / empty = manual only; e.g. 60 = the background loop refreshes it every 60s"
+              placeholder="0 = manual"
+              className="min-w-[6rem]"
+              value={form.matview_refresh_interval_sec ?? ""}
+              onChange={(event) =>
+                patchForm({
+                  matview_refresh_interval_sec: event.target.value ? Math.max(0, Number(event.target.value)) : null,
+                })
+              }
+            />
+            {selected && (
+              <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs">
+                <div className="font-semibold text-neutral-700">Last refresh</div>
+                <div className="mt-1 font-mono text-neutral-600">
+                  {selected.matview_last_refresh_at
+                    ? new Date(selected.matview_last_refresh_at).toLocaleString()
+                    : "never"}
+                  {selected.matview_last_refresh_status ? ` · ${selected.matview_last_refresh_status}` : ""}
+                </div>
+                <div className="mt-0.5 font-mono text-neutral-600">
+                  Rows: {selected.matview_row_count != null ? selected.matview_row_count.toLocaleString() : "—"}
+                </div>
+                {selected.matview_last_error ? (
+                  <div className="mt-0.5 break-words text-danger" title={selected.matview_last_error}>
+                    Error: {selected.matview_last_error.slice(0, 100)}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        )}
       </DrawerSection>
     );
   }

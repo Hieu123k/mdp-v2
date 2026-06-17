@@ -186,6 +186,8 @@ def _record_metadata(
     model.matview_refresh_duration_sec = duration_sec
     model.matview_row_count = row_count
     model.matview_last_error = error
+    # prompt 25: status surfaced read-only in the UI + used by the MatviewRefresher loop.
+    model.matview_last_refresh_status = "error" if error else "ok"
     if error is None:
         model.matview_last_refresh_at = datetime.now(timezone.utc)
     db.add(model)
@@ -199,6 +201,7 @@ def _clear_metadata(db: Session, model: DataModel) -> None:
     model.matview_row_count = None
     model.matview_last_error = None
     model.matview_last_refresh_at = None
+    model.matview_last_refresh_status = None
     db.add(model)
     db.commit()
     db.refresh(model)

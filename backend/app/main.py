@@ -38,6 +38,7 @@ from app.api.envelope import (
 )
 from app.core.config import settings
 from app.db.session import SessionLocal
+from app.services.matview_refresher import MatviewRefresher
 from app.services.source_count_refresher import SourceCountRefresher
 from app.services.streaming_refresher import StreamingRefresher
 from app.services.user_service import seed_default_admin
@@ -73,11 +74,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception:  # pragma: no cover - never block startup on the streaming loop
         pass
     app.state.streaming_refresher = streaming
+    matview = MatviewRefresher()
+    try:
+        matview.start()  # prompt 25: auto-refresh matview-enabled models with an interval set
+    except Exception:  # pragma: no cover - never block startup on the matview loop
+        pass
+    app.state.matview_refresher = matview
     try:
         yield
     finally:
         await refresher.stop()
         await streaming.stop()
+        await matview.stop()
 
 
 app = FastAPI(

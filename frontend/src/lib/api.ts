@@ -249,6 +249,14 @@ export type DataModel = {
   source_table?: string | null; // computed (Type B)
   latest_only?: boolean; // computed (Type B dedup, prompt 50)
   recency_column?: string | null; // computed (Type B dedup, prompt 50)
+  // matview (prompt 14 + 25): per-model materialized-view toggle + auto-refresh interval + read-only metadata
+  matview_enabled?: boolean;
+  matview_refresh_interval_sec?: number | null;
+  matview_last_refresh_at?: string | null;
+  matview_refresh_duration_sec?: number | null;
+  matview_row_count?: number | null;
+  matview_last_error?: string | null;
+  matview_last_refresh_status?: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -310,6 +318,9 @@ export type DataModelCreate = {
   // Type B "latest version only" dedup (prompt 50). Omitted => off / default behaviour.
   latest_only?: boolean;
   recency_column?: string | null;
+  // matview (prompt 14 + 25): opt-in materialized view + optional auto-refresh cadence (seconds; 0/omit = manual).
+  matview_enabled?: boolean;
+  matview_refresh_interval_sec?: number | null;
 };
 
 export const listDataModels = () => req<DataModel[]>("/data-models");

@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     streaming_enabled: bool = True
     streaming_interval: int = 60  # loop tick seconds (per-table cadence = poll_interval_sec)
 
+    # --- Matview auto-refresh loop (prompt 25) ---
+    # Loop ALWAYS runs (singleton); per-model `matview_refresh_interval_sec` (Data Model UI) is the
+    # control. MATVIEW_REFRESH_ENABLED is a MASTER kill-switch (default ON, re-checked each tick) for
+    # ops to globally pause auto-refresh. `matview_refresh_interval` is only the idle re-check tick.
+    matview_refresh_enabled: bool = True
+    matview_refresh_interval: int = 30  # idle loop tick seconds (re-check for newly-due matviews)
+
     # --- Verify verdict tolerance (prompt 15) ---
     # A STREAMING-enabled table lags Oracle by the rows the loop has not yet pulled (live-lag, a few
     # rows for F0911/F4111). A tiny |source - target| diff is NOT a real MISMATCH, so the grid + Verify

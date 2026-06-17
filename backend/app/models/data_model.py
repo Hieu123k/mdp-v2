@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON, Uuid
@@ -85,3 +85,7 @@ class DataModel(Base):
     matview_refresh_duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
     matview_row_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     matview_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # prompt 25: per-model auto-refresh cadence (NULL/0 = manual only; >0 = MatviewRefresher refreshes
+    # every N seconds) + the status of the last refresh ("ok" / "error"), surfaced read-only in the UI.
+    matview_refresh_interval_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    matview_last_refresh_status: Mapped[str | None] = mapped_column(Text, nullable=True)

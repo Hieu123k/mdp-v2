@@ -48,6 +48,10 @@ services:
       STREAMING_ENABLED: ${STREAMING_ENABLED:-false}
       STREAMING_INTERVAL: ${STREAMING_INTERVAL:-60}
       ORA2PG_SOURCE_COUNT_ENABLED: ${ORA2PG_SOURCE_COUNT_ENABLED:-false}
+      # prompt 25: MatviewRefresher master gate (default ON — an idle loop only refreshes Type B models
+      # that have an auto-refresh interval set, so it is near-free; set false to globally pause).
+      MATVIEW_REFRESH_ENABLED: ${MATVIEW_REFRESH_ENABLED:-true}
+      MATVIEW_REFRESH_INTERVAL: ${MATVIEW_REFRESH_INTERVAL:-30}
     volumes:
       # prompt 10: shared ora2pg scripts dir. The backend WRITES the generated perl scripts (probe_cols.pl,
       # discover_keys.pl, source_*.pl) here at runtime; an ora2pg container mounts the same named volume at

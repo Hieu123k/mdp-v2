@@ -1,0 +1,566 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "panels": [
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Margin"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT 1 AS k, round(sum(amount)::numeric,2)::float8 AS \"Revenue\" FROM mdp_models.acc_ar_360",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT 1 AS k, round(sum(amount)::numeric,2)::float8 AS \"Cost\" FROM mdp_models.acc_ap_360",
+          "refId": "B"
+        }
+      ],
+      "title": "KPI: Revenue / Cost / Gross Profit / Margin (Rev & Cost from 2 facts, subtracted in panel)",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "k",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "Gross Profit",
+            "binary": {
+              "left": "Revenue",
+              "operator": "-",
+              "right": "Cost"
+            },
+            "mode": "binary",
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "Margin",
+            "binary": {
+              "left": "Gross Profit",
+              "operator": "/",
+              "right": "Revenue"
+            },
+            "mode": "binary",
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "k": true
+            }
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('month',issue_date)::timestamp AS time, round(sum(amount)::numeric,2)::float8 AS \"Revenue\" FROM mdp_models.acc_ar_360 GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('month',issue_date)::timestamp AS time, round(sum(amount)::numeric,2)::float8 AS \"Cost\" FROM mdp_models.acc_ap_360 GROUP BY 1 ORDER BY 1",
+          "refId": "B"
+        }
+      ],
+      "title": "Revenue vs Cost vs Profit by month",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "time",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "Profit",
+            "binary": {
+              "left": "Revenue",
+              "operator": "-",
+              "right": "Cost"
+            },
+            "mode": "binary",
+            "replaceFields": false
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 13
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "xField": "region"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT region, round(sum(amount)::numeric,2)::float8 AS revenue FROM mdp_models.acc_ar_360 GROUP BY region ORDER BY revenue DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Revenue by Region (AR)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 13
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "xField": "category"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT category, round(sum(amount)::numeric,2)::float8 AS cost FROM mdp_models.acc_ap_360 GROUP BY category ORDER BY cost DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Cost by Category (AP)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 13
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT status, count(*)::int AS invoices FROM mdp_models.acc_ar_360 GROUP BY status ORDER BY status",
+          "refId": "A"
+        }
+      ],
+      "title": "AR Invoice Status",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 21
+      },
+      "id": 6,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT customer_name, round(sum(amount)::numeric,2)::float8 AS revenue, count(*)::int AS invoices FROM mdp_models.acc_ar_360 GROUP BY customer_name ORDER BY revenue DESC LIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 Customers by Revenue",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 21
+      },
+      "id": 7,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT vendor_name, round(sum(amount)::numeric,2)::float8 AS cost, count(*)::int AS bills FROM mdp_models.acc_ap_360 GROUP BY vendor_name ORDER BY cost DESC LIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "title": "Top 10 Vendors by Cost",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('month',receipt_date)::timestamp AS time, round(sum(amount)::numeric,2)::float8 AS \"Cash In\" FROM mdp_models.acc_receipts_enriched GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('month',payment_date)::timestamp AS time, round(sum(amount)::numeric,2)::float8 AS \"Cash Out\" FROM mdp_models.acc_payments_enriched GROUP BY 1 ORDER BY 1",
+          "refId": "B"
+        }
+      ],
+      "title": "Cash In vs Out vs Net by month (Receipts - Payments, subtracted in panel)",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "time",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "Net Cash",
+            "binary": {
+              "left": "Cash In",
+              "operator": "-",
+              "right": "Cash Out"
+            },
+            "mode": "binary",
+            "replaceFields": false
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "xField": "bucket"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT CASE WHEN current_date-due_date<=30 THEN '0-30' WHEN current_date-due_date<=60 THEN '31-60' WHEN current_date-due_date<=90 THEN '61-90' ELSE '90+' END AS bucket, round(sum(amount)::numeric,2)::float8 AS outstanding FROM mdp_models.acc_ar_360 WHERE status<>'paid' AND current_date>=due_date GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "AR Aging (outstanding, status<>paid)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "xField": "bucket"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT CASE WHEN current_date-due_date<=30 THEN '0-30' WHEN current_date-due_date<=60 THEN '31-60' WHEN current_date-due_date<=90 THEN '61-90' ELSE '90+' END AS bucket, round(sum(amount)::numeric,2)::float8 AS outstanding FROM mdp_models.acc_ap_360 WHERE status<>'paid' AND current_date>=due_date GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "AP Aging (outstanding, status<>paid)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "mdp_postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "xField": "account_type"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "mdp_postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT account_type, round(sum(debit-credit)::numeric,2)::float8 AS net FROM mdp_models.acc_gl_report GROUP BY account_type ORDER BY account_type",
+          "refId": "A"
+        }
+      ],
+      "title": "Trial Balance / P&L by account_type (sum debit-credit)",
+      "type": "barchart"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [
+    "mdp",
+    "v2",
+    "accounting",
+    "demo"
+  ],
+  "time": {
+    "from": "now-120d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Accounting Statistics"
+}
