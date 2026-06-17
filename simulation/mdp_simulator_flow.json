@@ -133,5 +133,44 @@
         "modules": {
             "node-red-dashboard": "3.6.6"
         }
+    },
+    {
+        "id": "seed_inject_p23",
+        "type": "inject",
+        "z": "c5d34e9ba94dba6e",
+        "name": "Seed demo objects (sim_customer/sim_invoice)",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "0.5",
+        "topic": "",
+        "x": 250,
+        "y": 70,
+        "wires": [
+            [
+                "seed_fn_p23"
+            ]
+        ]
+    },
+    {
+        "id": "seed_fn_p23",
+        "type": "function",
+        "z": "c5d34e9ba94dba6e",
+        "name": "seed demo objects",
+        "func": "// prompt 23: seed the two demo objects so the /ui is reproducible. API key VALUES are added at\n// runtime via the UI (never committed); objects only reference key labels. Idempotent: replaces these two\n// objects, preserves any others + all keys; resets their Seq counters so a fresh seed yields customer_id 1..10.\nlet objects = flow.get(\"mdpsim_objects\") || [];\nconst demo = [\n  {name:\"sim_customer\", model:\"sim_customer\", key:\"sim_inbound_customer\", attrs:[\n    {name:\"customer_id\",   type:\"text\",     gen:\"Seq\",    cfg:{start:1, seqstep:1}},\n    {name:\"customer_name\", type:\"text\",     gen:\"Random\", cfg:{template:\"CUST-{seq}\"}},\n    {name:\"region\",        type:\"text\",     gen:\"List\",   cfg:{values:\"North, Central, South\"}},\n    {name:\"segment\",       type:\"text\",     gen:\"List\",   cfg:{values:\"SME, Enterprise, Retail\"}},\n    {name:\"created_date\",  type:\"date\",     gen:\"Random\", cfg:{daysback:365}}\n  ]},\n  {name:\"sim_invoice\", model:\"sim_invoice\", key:\"sim_inbound_invoice\", attrs:[\n    {name:\"invoice_no\",  type:\"text\",     gen:\"Random\", cfg:{template:\"INV-{seq}\"}},\n    {name:\"customer_id\", type:\"text\",     gen:\"List\",   cfg:{values:\"1,2,3,4,5,6,7,8,9,10\"}},\n    {name:\"amount\",      type:\"float\",    gen:\"Random\", cfg:{min:50, max:5000, step:0.01}},\n    {name:\"status\",      type:\"text\",     gen:\"List\",   cfg:{values:\"open, paid, cancelled\"}},\n    {name:\"issued_date\", type:\"date\",     gen:\"Random\", cfg:{daysback:90}},\n    {name:\"issued_at\",   type:\"datetime\", gen:\"Random\", cfg:{}}\n  ]}\n];\nconst names = demo.map(o=>o.name);\nobjects = objects.filter(o=>!names.includes(o.name)).concat(demo);\nflow.set(\"mdpsim_objects\", objects);\nlet ctr = flow.get(\"mdpsim_seqctr\") || {};\nObject.keys(ctr).forEach(k=>{ if(k.indexOf(\"sim_customer|\")===0 || k.indexOf(\"sim_invoice|\")===0) delete ctr[k]; });\nflow.set(\"mdpsim_seqctr\", ctr);\nconst keys = flow.get(\"mdpsim_keys\") || [];\nnode.status({fill:\"green\",shape:\"dot\",text:\"seeded 2 demo objects @ \"+new Date(Date.now()+25200000).toISOString().slice(11,19)});\nreturn {topic:\"state\", payload:{objects, keys}};\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 510,
+        "y": 70,
+        "wires": [
+            [
+                "dbe1dfc43590ec36"
+            ]
+        ]
     }
 ]
