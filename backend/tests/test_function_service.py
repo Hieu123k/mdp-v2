@@ -12,11 +12,13 @@ from app.services.functions import (
     _parse_where,
 )
 
+# attribute-map shape mirrors outbound_service.attribute_map: keyed by name, value is the full attribute
+# dict (which includes "name" + "data_type"), so coerce_filter_value can read attribute["name"].
 ATTRS = {
-    "region": {"data_type": "text"},
-    "amount": {"data_type": "float"},
-    "issue_date": {"data_type": "date"},
-    "status": {"data_type": "text"},
+    "region": {"name": "region", "data_type": "text"},
+    "amount": {"name": "amount", "data_type": "float"},
+    "issue_date": {"name": "issue_date", "data_type": "date"},
+    "status": {"name": "status", "data_type": "text"},
 }
 
 
@@ -74,3 +76,32 @@ def test_where_parses_to_bound_param():
 def test_where_rejects_unknown_column():
     with pytest.raises(FunctionError):
         _parse_where("evil=1", ATTRS, {})
+
+
+# --- audit hardening: where/from/to VALUES are type-coerced (bad value -> clean 4xx, not a DB 500) ---
+def test_where_coerces_numeric_value_to_native():
+    out: dict = {}
+    _parse_where("amount=12.5", ATTRS, out)
+    assert out["fn_w"] == 12.5  # bound as a float, not the string "12.5"
+
+
+def test_where_rejects_non_numeric_value_for_numeric_column():
+    with pytest.raises(FunctionError) as exc:
+        _parse_where("amount=abc", ATTRS, {})
+    assert exc.value.status_code == 422
+
+
+def test_where_rejects_bad_date_value():
+    with pytest.raises(FunctionError) as exc:
+        _parse_where("issue_date=not-a-date", ATTRS, {})
+    assert exc.value.status_code == 422
+
+
+def test_time_filter_coerces_and_rejects_bad_from():
+    from app.services.functions import _time_filter
+
+    ok: dict = {}
+    clauses = _time_filter({"from": "2024-01-01"}, '"issue_date"', ATTRS["issue_date"], ok)
+    assert clauses == ['"issue_date" >= :fn_from'] and ok["fn_from"] == "2024-01-01"
+    with pytest.raises(FunctionError):
+        _time_filter({"from": "not-a-date"}, '"issue_date"', ATTRS["issue_date"], {})
