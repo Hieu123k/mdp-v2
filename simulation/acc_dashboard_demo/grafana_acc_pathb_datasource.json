@@ -1,0 +1,16 @@
+{
+  "_comment": "prompt 27 — Path B (Infinity) datasource for the Accounting Statistics dashboard. Created at runtime via POST /api/datasources (parity with the runtime acc_stats Path A dashboard). The X-API-Key VALUE is an OUTBOUND-scoped key for the acc Type B models (acc_ar_360, acc_ap_360, acc_gl_report, acc_receipts_enriched, acc_payments_enriched) — supplied at runtime, NEVER committed. Pair with grafana_acc_pathb.json (the dashboard).",
+  "name": "ACC Outbound (function)",
+  "uid": "acc_outbound",
+  "type": "yesoreyeram-infinity-datasource",
+  "access": "proxy",
+  "isDefault": false,
+  "jsonData": {
+    "allowedHosts": ["http://reverse-proxy:8456"],
+    "httpHeaderName1": "X-API-Key",
+    "tlsSkipVerify": true
+  },
+  "secureJsonData": {
+    "httpHeaderValue1": "$ACC_OUTBOUND_API_KEY"
+  }
+}

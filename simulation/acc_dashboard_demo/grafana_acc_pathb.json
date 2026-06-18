@@ -1,0 +1,365 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "acc_outbound"
+      },
+      "description": "Path B - Infinity -> /api/outbound/{model}?function= (server-side aggregation)",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {},
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "region",
+              "text": "region",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "revenue",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "acc_outbound"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/acc_ar_360?function=aggregate&agg=sum&measure=amount&group_by=region",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Revenue by Region (AR) - Path B [aggregate]",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "acc_outbound"
+      },
+      "description": "Path B - Infinity -> /api/outbound/{model}?function= (server-side aggregation)",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {},
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "category",
+              "text": "category",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "cost",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "acc_outbound"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/acc_ap_360?function=aggregate&agg=sum&measure=amount&group_by=category",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Cost by Category (AP) - Path B [aggregate]",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "acc_outbound"
+      },
+      "description": "Path B - Infinity -> /api/outbound/{model}?function= (server-side aggregation)",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [],
+          "fields": "/^count$/",
+          "values": true
+        }
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "status",
+              "text": "status",
+              "type": "string"
+            },
+            {
+              "selector": "count",
+              "text": "count",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "acc_outbound"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/acc_ar_360?function=breakdown&group_by=status",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "AR Invoice Status - Path B [breakdown]",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "acc_outbound"
+      },
+      "description": "Path B - Infinity -> /api/outbound/{model}?function= (server-side aggregation)",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {},
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "customer_name",
+              "text": "customer",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "revenue",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "acc_outbound"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/acc_ar_360?function=top&measure=amount&group_by=customer_name&limit=10",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Top 10 Customers by Revenue - Path B [top]",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "acc_outbound"
+      },
+      "description": "Path B - Infinity -> /api/outbound/{model}?function= (server-side aggregation)",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {},
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "bucket",
+              "text": "bucket",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "amount",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "acc_outbound"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/acc_ar_360?function=aging&date_col=due_date&measure=amount&buckets=30,60,90",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "AR Aging (outstanding) - Path B [aging]",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "acc_outbound"
+      },
+      "description": "Path B - Infinity -> /api/outbound/{model}?function= (server-side aggregation)",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 6,
+      "options": {},
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "bucket",
+              "text": "month",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "revenue",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "acc_outbound"
+          },
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "data.data",
+          "source": "url",
+          "type": "json",
+          "url": "http://reverse-proxy:8456/api/outbound/acc_ar_360?function=timeseries&agg=sum&measure=amount&date_col=issue_date&bucket=month",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Revenue by Month (AR) - Path B [timeseries]",
+      "type": "barchart"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": [
+    "accounting",
+    "path-b",
+    "function-service",
+    "prompt27"
+  ],
+  "templating": {
+    "list": []
+  },
+  "timezone": "browser",
+  "title": "Accounting Statistics - Path B (function service)",
+  "uid": "acc_stats_pathb"
+}

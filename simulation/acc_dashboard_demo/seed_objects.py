@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Replace the prompt-23 seed function (seed_fn_p23) in a Node-RED flow array (stdin) with an expanded
-seed that loads the 8 accounting demo objects (acc_*) per design SS1/SS4 (plus the existing sim_* objects).
+"""Replace the prompt-23 seed function (seed_fn_p23) in a Node-RED flow array (stdin) with a seed that
+loads the 8 accounting demo objects (acc_*) per design SS1/SS4. (prompt 27: the old sim_customer /
+sim_invoice sales-demo objects were dropped with the sim_* cleanup; streaming sim_reading is untouched.)
 Key VALUES are added at runtime (never committed) — objects only reference key labels. Output -> stdout."""
 import sys, json
 
@@ -11,21 +12,9 @@ SEED_FUNC = r"""// prompt 23 + 25: seed the demo objects so the /ui is reproduci
 // others + all keys; resets their Seq counters so a fresh seed yields distinct dim ids.
 let objects = flow.get("mdpsim_objects") || [];
 const demo = [
-  // --- prompt 23 sim demo (kept) ---
-  {name:"sim_customer", model:"sim_customer", key:"sim_inbound_customer", attrs:[
-    {name:"customer_id",type:"text",gen:"Seq",cfg:{start:1,seqstep:1}},
-    {name:"customer_name",type:"text",gen:"Random",cfg:{template:"CUST-{seq}"}},
-    {name:"region",type:"text",gen:"List",cfg:{values:"North, Central, South"}},
-    {name:"segment",type:"text",gen:"List",cfg:{values:"SME, Enterprise, Retail"}},
-    {name:"created_date",type:"date",gen:"Random",cfg:{daysback:365}}]},
-  {name:"sim_invoice", model:"sim_invoice", key:"sim_inbound_invoice", attrs:[
-    {name:"invoice_no",type:"text",gen:"Random",cfg:{template:"INV-{seq}"}},
-    {name:"customer_id",type:"text",gen:"List",cfg:{values:"1,2,3,4,5,6,7,8,9,10"}},
-    {name:"amount",type:"float",gen:"Random",cfg:{min:50,max:5000,step:0.01}},
-    {name:"status",type:"text",gen:"List",cfg:{values:"open, paid, cancelled"}},
-    {name:"issued_date",type:"date",gen:"Random",cfg:{daysback:90}},
-    {name:"issued_at",type:"datetime",gen:"Random",cfg:{}}]},
   // --- prompt 25 accounting demo: 3 dims (Seq) + 5 facts (List FK) ---
+  // (prompt 27: the sim_customer / sim_invoice sales-demo objects were removed together with the
+  //  rest of the sim_* sales demo — streaming sim_reading is unaffected.)
   {name:"acc_customer", model:"acc_customer", key:"acc_in_acc_customer", attrs:[
     {name:"customer_id",type:"text",gen:"Seq",cfg:{start:1,seqstep:1}},
     {name:"customer_name",type:"text",gen:"Random",cfg:{template:"CUST-{seq}"}},

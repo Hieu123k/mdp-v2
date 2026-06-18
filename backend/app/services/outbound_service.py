@@ -29,6 +29,10 @@ from app.services.db_browser_service import serialize_value
 
 
 RESERVED_QUERY_PARAMS = {"limit", "offset", "include_meta", "include_raw"}
+# prompt 27: the ?function= aggregation params are reserved so they are never treated as raw-row filters.
+FUNCTION_QUERY_PARAMS = {
+    "function", "agg", "measure", "group_by", "date_col", "bucket", "buckets", "where", "from", "to",
+}
 
 
 class OutboundValidationError(Exception):
@@ -327,6 +331,33 @@ def query_matview_records(
     return [normalize_row(dict(row)) for row in rows]
 
 
+def outbound_source_relation(db: Session, model: DataModel) -> tuple[str, dict[str, dict[str, Any]]]:
+    """prompt 27: a FROM-usable SQL relation whose columns are the model's EXPOSED attribute names, for the
+    ``?function=`` aggregation layer — the matview, the Type A generated table, or the Type B read-through
+    wrapped as a subquery. Every identifier is ``validate_identifier``-d + quoted (injection-safe). Returns
+    ``(relation_sql, attribute_map)`` where attribute_map[name] = {"data_type": ...}."""
+    from app.services import matview_service
+
+    if model.type == "B":
+        attributes = type_b_attribute_map(model)
+        if matview_service.matview_available(db, model):
+            return matview_service.matview_qualified_name(model), attributes
+        validation = validate_type_b_outbound_mapping(db, model)
+        from_sql, alias_by_table = build_type_b_from_clause(db, validation)
+        select_clause = ", ".join(
+            f"{type_b_qualified_column(alias_by_table, column)} AS {quote_identifier(column['attribute'])}"
+            for column in validation["mapped_columns"]
+        )
+        return f"(SELECT {select_clause} FROM {from_sql}) AS fn_src", attributes
+
+    attributes = attribute_map(model)
+    table_name = model.generated_table or get_generated_table_name(model.name)
+    schema_name, bare_table_name = table_name.split(".", 1)
+    validate_identifier(schema_name, "Schema name")
+    validate_identifier(bare_table_name, "Table name")
+    return f"{quote_identifier(schema_name)}.{quote_identifier(bare_table_name)}", attributes
+
+
 def query_outbound_record_by_key(
     db: Session,
     *,
@@ -414,11 +445,53 @@ def list_outbound(
 ) -> dict[str, Any]:
     request_payload = {"path": endpoint, "query_params": query_params}
     model = validate_outbound_model(db, model_name, request_payload, auth_context)
-    filters = {
-        key: value for key, value in query_params.items() if key not in RESERVED_QUERY_PARAMS
-    }
+    function = query_params.get("function")
 
     try:
+        # prompt 27: server-side aggregation. Backward-compatible — only engages when ?function= is set;
+        # otherwise the raw-row path below is unchanged. Function params validate against the model's
+        # exposed columns; FunctionError maps to 422 (bad column) / 400 (bad param), never leaks SQL.
+        if function:
+            from app.services.functions import FunctionError, run_function
+
+            try:
+                records = run_function(db, model=model, function=function, params=query_params)
+            except FunctionError as fexc:
+                if fexc.status_code == 422:
+                    raise OutboundValidationError(
+                        [{"field": "function", "message": fexc.message}]
+                    ) from fexc
+                raise ValueError(fexc.message) from fexc
+            response_payload = {
+                "status": "success",
+                "model": model.name,
+                "type": model.type,
+                "function": function,
+                "count": len(records),
+                "data": records,
+            }
+            log_transaction(
+                db,
+                direction="outbound",
+                protocol="rest",
+                data_model_id=model.id,
+                endpoint=endpoint,
+                status="success",
+                request_payload=request_payload,
+                response_payload={"count": len(records), "model": model.name, "function": function},
+                auth_type=auth_context.auth_type,
+                api_key_id=auth_context.api_key_id,
+                user_id=auth_context.user_id,
+                source_system=auth_context.source_system or model.source_system,
+            )
+            db.commit()
+            return response_payload
+
+        filters = {
+            key: value
+            for key, value in query_params.items()
+            if key not in RESERVED_QUERY_PARAMS and key not in FUNCTION_QUERY_PARAMS
+        }
         if model.type == "B":
             if include_raw:
                 raise ValueError("include_raw is only supported for Type A models.")
