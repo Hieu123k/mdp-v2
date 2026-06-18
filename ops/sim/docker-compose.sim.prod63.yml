@@ -1,0 +1,50 @@
+# Prompt 31 — PROD-SAFE Node-RED accounting simulator (artifact for tipa-mdp → prod .63, prompt 32).
+#
+# 🔴 COEXIST ABSOLUTELY: prod host .63 already runs an UNRELATED `nodered:1880` (another project). This
+# stack is fully namespaced — container `mdpv2-sim-nodered`, host port 1881 (NOT 1880), its own image and
+# volume `mdpv2_sim_data` — and NEVER touches that other container/port/volume.
+#
+# Prod:   http://10.116.204.63:1881/ui   (network = the MDP prod compose network)
+# It POSTs to the MDP edge as http://reverse-proxy:8456 over the joined network (no public IP hardcoded).
+#
+#   cd ops/sim && cp .env.example .env && <fill .env on the host> && \
+#     docker compose -f docker-compose.sim.prod63.yml up -d --build
+#
+# Test on mdp2: set SIM_PORT=1882 (1881 is the existing DEV sim) + MDP_NETWORK=mdpv2_default in .env.
+# Distinct compose project name so it never treats any other sim as an "orphan" (COEXIST safety).
+name: mdpv2-sim-prod
+
+services:
+  sim-nodered:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mdpv2-sim-nodered:2.2.0
+    container_name: mdpv2-sim-nodered
+    environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      # Node-RED credential-encryption secret (host .env, git-ignored; not strictly needed — no real creds).
+      NODE_RED_CREDENTIAL_SECRET: ${NODE_RED_CREDENTIAL_SECRET:-}
+      # MDP edge the flow POSTs to — read by the flow via env, default the in-network reverse-proxy.
+      MDP_BASE_URL: ${MDP_BASE_URL:-http://reverse-proxy:8456}
+      # Acc inbound key VALUES as JSON {label:value}, from the bootstrap output. RUNTIME ONLY — never git.
+      MDP_ACC_KEYS: ${MDP_ACC_KEYS:-}
+    ports:
+      # Host 1881 by default (prod). NEVER 1880. Override SIM_PORT for the mdp2 coexistence test.
+      - "${SIM_PORT:-1881}:1880"
+    volumes:
+      - mdpv2_sim_data:/data
+    networks:
+      - mdpnet
+    restart: unless-stopped
+
+networks:
+  # The MDP stack's compose network (external = already created by the MDP stack; we only join it).
+  # Prod = mdp_default; mdp2 test = mdpv2_default.
+  mdpnet:
+    external: true
+    name: ${MDP_NETWORK:-mdp_default}
+
+volumes:
+  mdpv2_sim_data:
+    name: mdpv2_sim_data

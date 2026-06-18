@@ -1,0 +1,308 @@
+[
+  {
+    "id": "c5d34e9ba94dba6e",
+    "type": "tab",
+    "label": "MDP Simulator",
+    "disabled": false,
+    "info": "Dashboard mo phong MDP Type A. POST {host}/api/inbound/{model} va GET {host}/api/outbound/{model}, header X-API-Key. Tick nhieu doi tuong de ap dung dong thoi. Moi attribute co Kieu + Sinh (Random/List/Tang dan), bam Cau hinh mo popup. GET hien du lieu o panel 'Du lieu GET gan nhat'. Persistent: settings.js contextStorage default localfilesystem roi restart. Mo /ui."
+  },
+  {
+    "id": "ui_tls",
+    "type": "tls-config",
+    "name": "MDP self-signed",
+    "cert": "",
+    "key": "",
+    "ca": "",
+    "certname": "",
+    "keyname": "",
+    "caname": "",
+    "servername": "",
+    "verifyservercert": false
+  },
+  {
+    "id": "ui_tab_sim",
+    "type": "ui_tab",
+    "name": "MDP Simulator",
+    "icon": "dashboard",
+    "order": 1
+  },
+  {
+    "id": "6a20e9874a47a24a",
+    "type": "global-config",
+    "env": []
+  },
+  {
+    "id": "ui_grp_sim",
+    "type": "ui_group",
+    "name": "Mo phong",
+    "tab": "ui_tab_sim",
+    "order": 1,
+    "disp": true,
+    "width": 12,
+    "collapse": false
+  },
+  {
+    "id": "a8445d9fd91ac654",
+    "type": "ui_base",
+    "theme": {
+      "name": "theme-light",
+      "lightTheme": {
+        "default": "#0094CE",
+        "baseColor": "#0094CE",
+        "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+        "edited": false
+      },
+      "darkTheme": {
+        "default": "#097479",
+        "baseColor": "#097479",
+        "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+        "edited": false
+      },
+      "customTheme": {
+        "name": "Untitled Theme 1",
+        "default": "#4B7930",
+        "baseColor": "#4B7930",
+        "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+      },
+      "themeState": {
+        "base-color": {
+          "default": "#0094CE",
+          "value": "#0094CE",
+          "edited": false
+        },
+        "page-titlebar-backgroundColor": {
+          "value": "#0094CE",
+          "edited": false
+        },
+        "page-backgroundColor": {
+          "value": "#fafafa",
+          "edited": false
+        },
+        "page-sidebar-backgroundColor": {
+          "value": "#ffffff",
+          "edited": false
+        },
+        "group-textColor": {
+          "value": "#1bbfff",
+          "edited": false
+        },
+        "group-borderColor": {
+          "value": "#ffffff",
+          "edited": false
+        },
+        "group-backgroundColor": {
+          "value": "#ffffff",
+          "edited": false
+        },
+        "widget-textColor": {
+          "value": "#111111",
+          "edited": false
+        },
+        "widget-backgroundColor": {
+          "value": "#0094ce",
+          "edited": false
+        },
+        "widget-borderColor": {
+          "value": "#ffffff",
+          "edited": false
+        },
+        "base-font": {
+          "value": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif"
+        }
+      },
+      "angularTheme": {
+        "primary": "indigo",
+        "accents": "blue",
+        "warn": "red",
+        "background": "grey",
+        "palette": "light"
+      }
+    },
+    "site": {
+      "name": "Node-RED Dashboard",
+      "hideToolbar": "false",
+      "allowSwipe": "false",
+      "lockMenu": "false",
+      "allowTempTheme": "true",
+      "dateFormat": "DD/MM/YYYY",
+      "sizes": {
+        "sx": 48,
+        "sy": 48,
+        "gx": 6,
+        "gy": 6,
+        "cx": 6,
+        "cy": 6,
+        "px": 0,
+        "py": 0
+      }
+    }
+  },
+  {
+    "id": "dbe1dfc43590ec36",
+    "type": "ui_template",
+    "z": "c5d34e9ba94dba6e",
+    "group": "ui_grp_sim",
+    "name": "MDP Simulator UI",
+    "order": 1,
+    "width": 12,
+    "height": 38,
+    "format": "<style>\n.mdpsim{font-family:inherit}\n.mdpsim .card{background:#fff;border:1px solid #d9dde2;border-radius:10px;padding:12px 14px;margin-bottom:12px}\n.mdpsim .ttl{font-weight:600;color:#1F4E79;margin:0 0 10px;font-size:14px}\n.mdpsim label{font-size:12px;color:#6b7280}\n.mdpsim input,.mdpsim select{width:100%;box-sizing:border-box;height:32px;padding:2px 8px;border:1px solid #cbd2d9;border-radius:6px;font-size:13px}\n.mdpsim .row{display:grid;gap:10px;margin-bottom:10px}\n.mdpsim .btn{height:32px;border:1px solid #cbd2d9;border-radius:6px;background:#f7f8fa;cursor:pointer;font-size:13px}\n.mdpsim .btn.primary{background:#1F4E79;color:#fff;border-color:#1F4E79}\n.mdpsim .btn.get{background:#0F6E56;color:#fff;border-color:#0F6E56}\n.mdpsim table{width:100%;border-collapse:collapse;font-size:12px}\n.mdpsim th{text-align:left;color:#6b7280;font-weight:500;padding:4px}\n.mdpsim td{padding:4px;border-top:1px solid #eef1f4}\n.mdpsim .head{display:grid;gap:8px;padding:6px 4px;background:#eef2f7;border-radius:6px 6px 0 0;font-size:12px;color:#6b7280}\n.mdpsim .arow{display:grid;gap:8px;padding:6px 4px;align-items:center;border-bottom:1px solid #eef1f4}\n.mdpsim .ok{color:#15803d}.mdpsim .err{color:#b91c1c}\n.mdpsim .grid2{grid-template-columns:1fr 1fr}\n.mdpsim .grid3{grid-template-columns:1fr 1fr 1fr}\n.mdpsim .acols{grid-template-columns:1.4fr 1fr 1fr 1.6fr 36px}\n.mdpsim .ov{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:50}\n.mdpsim .pop{background:#fff;border-radius:10px;padding:16px 18px;width:340px;box-shadow:0 8px 30px rgba(0,0,0,.2)}\n.mdpsim .pop h4{margin:0 0 12px;color:#1F4E79;font-size:14px}\n.mdpsim .pop .fld{margin-bottom:10px}\n.mdpsim .cfgsum{font-size:11px;color:#6b7280}\n.mdpsim .runy{color:#1F4E79}.mdpsim .runn{color:#6b7280}\n.mdpsim pre{background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;font-size:12px;overflow:auto;max-height:220px;white-space:pre-wrap;margin:0}\n</style>\n<div class=\"mdpsim\" ng-init=\"init()\">\n  <div class=\"card\">\n    <p class=\"ttl\">Gửi / Lấy dữ liệu</p>\n    <div class=\"row\"><div><label>Host</label><input ng-model=\"host\"></div></div>\n    <label>Đối tượng (tick để bật — áp dụng đồng thời)</label>\n    <div style=\"border:1px solid #d9dde2;border-radius:6px;max-height:170px;overflow:auto;margin:4px 0 10px\">\n      <label class=\"arow\" style=\"grid-template-columns:26px 1fr;cursor:pointer;border-bottom:1px solid #eef1f4\" ng-repeat=\"o in objects\">\n        <input type=\"checkbox\" ng-model=\"active[o.name]\" style=\"width:auto;height:auto\">\n        <span>{{o.name}} <small style=\"color:#6b7280\">({{o.model}} · {{o.key||'chưa gán key'}})</small></span>\n      </label>\n      <div ng-if=\"!objects.length\" style=\"padding:8px;color:#6b7280;font-size:12px\">Chưa có đối tượng</div>\n    </div>\n    <div class=\"row grid2\">\n      <div><label>Số lần</label><input type=\"number\" ng-model=\"count\"></div>\n      <div><label>Chu kỳ (giây)</label><input type=\"number\" ng-model=\"interval\"></div>\n    </div>\n    <div class=\"row grid3\">\n      <button class=\"btn primary\" ng-click=\"sendOnce()\">POST 1 lần</button>\n      <button class=\"btn primary\" ng-click=\"sendStream()\">POST liên tục</button>\n      <button class=\"btn\" ng-click=\"stop()\">Dừng</button>\n    </div>\n    <div class=\"row\"><button class=\"btn get\" ng-click=\"getData()\">GET (outbound) — lấy dữ liệu</button></div>\n    <div style=\"font-size:12px\">\n      <span ng-if=\"running\" class=\"runy\">▶ đang POST liên tục mỗi {{interval}}s</span>\n      <span ng-if=\"!running\" class=\"runn\">■ dừng</span>\n      <span class=\"runn\"> · đã gọi {{sent||0}}</span>\n    </div>\n  </div>\n  <div class=\"card\">\n    <p class=\"ttl\">Thêm đối tượng</p>\n    <div class=\"row grid3\">\n      <div><label>Tên</label><input ng-model=\"newObj.name\"></div>\n      <div><label>Model</label><input ng-model=\"newObj.model\"></div>\n      <div><label>API key</label><select ng-model=\"newObj.key\"><option ng-repeat=\"k in keys\" value=\"{{k.label}}\">{{k.label}}</option></select></div>\n    </div>\n    <label>Attributes</label>\n    <div style=\"border:1px solid #d9dde2;border-radius:6px;overflow:hidden;margin-top:4px\">\n      <div class=\"head acols\"><span>Tên attribute</span><span>Kiểu</span><span>Sinh</span><span>Cấu hình</span><span></span></div>\n      <div class=\"arow acols\" ng-repeat=\"a in newObj.attrs track by $index\">\n        <input ng-model=\"a.name\" placeholder=\"invoice_no\">\n        <select ng-model=\"a.type\"><option>text</option><option>integer</option><option>float</option><option>date</option><option>datetime</option></select>\n        <select ng-model=\"a.gen\" ng-change=\"onGen(a)\"><option value=\"Random\">Random</option><option value=\"List\">List</option><option value=\"Seq\">Tăng dần</option></select>\n        <div><button class=\"btn\" style=\"width:100%\" ng-click=\"openCfg(a)\">Cấu hình</button><div class=\"cfgsum\">{{summary(a)}}</div></div>\n        <button class=\"btn\" ng-click=\"delAttr($index)\">×</button>\n      </div>\n    </div>\n    <div class=\"row grid3\" style=\"margin-top:10px\">\n      <button class=\"btn\" ng-click=\"addAttr()\">+ Thêm dòng</button>\n      <button class=\"btn primary\" ng-click=\"saveObj()\">Lưu</button>\n      <button class=\"btn\" ng-click=\"delObj()\">Xoá</button>\n    </div>\n  </div>\n  <div class=\"card\">\n    <p class=\"ttl\">Thêm API key</p>\n    <div class=\"row grid2\">\n      <div><label>Nhãn</label><input ng-model=\"newKey.label\"></div>\n      <div><label>Giá trị</label><input ng-model=\"newKey.value\"></div>\n    </div>\n    <div class=\"row grid2\">\n      <button class=\"btn primary\" ng-click=\"saveKey()\">Lưu</button>\n      <button class=\"btn\" ng-click=\"delKey()\">Xoá</button>\n    </div>\n  </div>\n  <div class=\"card\">\n    <p class=\"ttl\">Kết quả (POST / GET)</p>\n    <div ng-if=\"status\" ng-class=\"statusOk?'ok':'err'\" style=\"margin-bottom:8px;font-size:13px\">{{status}}</div>\n    <table><thead><tr><th>Thời gian</th><th>Op</th><th>Đối tượng</th><th>Mã</th><th>Thông điệp</th></tr></thead>\n      <tbody><tr ng-repeat=\"r in log\"><td>{{r.time}}</td><td>{{r.op}}</td><td>{{r.object}}</td><td ng-class=\"r.ok?'ok':'err'\">{{r.status}}</td><td>{{r.message}}</td></tr></tbody>\n    </table>\n  </div>\n  <div class=\"card\">\n    <p class=\"ttl\">Dữ liệu GET gần nhất</p>\n    <pre ng-if=\"lastGet\">{{lastGet}}</pre>\n    <div ng-if=\"!lastGet\" style=\"color:#6b7280;font-size:12px\">Chưa GET</div>\n  </div>\n  <div class=\"ov\" ng-if=\"pop.open\">\n    <div class=\"pop\">\n      <h4>Cấu hình: {{pop.a.name||'attribute'}} — {{pop.a.gen=='Seq'?'Tăng dần':pop.a.gen}}</h4>\n      <div ng-if=\"pop.a.gen=='Random' && (pop.a.type=='integer'||pop.a.type=='float')\">\n        <div class=\"fld\"><label>Min</label><input type=\"number\" ng-model=\"pop.a.cfg.min\"></div>\n        <div class=\"fld\"><label>Max (tối đa)</label><input type=\"number\" ng-model=\"pop.a.cfg.max\"></div>\n        <div class=\"fld\"><label>Bước nhảy</label><input type=\"number\" ng-model=\"pop.a.cfg.step\"></div>\n      </div>\n      <div ng-if=\"pop.a.gen=='Random' && pop.a.type=='text'\">\n        <div class=\"fld\"><label>Độ dài tối đa</label><input type=\"number\" ng-model=\"pop.a.cfg.maxlen\"></div>\n        <div class=\"fld\"><label>Mẫu (tuỳ chọn: {seq} {rand} {now})</label><input ng-model=\"pop.a.cfg.template\" placeholder=\"INV-{seq}\"></div>\n      </div>\n      <div ng-if=\"pop.a.gen=='Random' && pop.a.type=='date'\">\n        <div class=\"fld\"><label>Số ngày lùi tối đa (0 = hôm nay)</label><input type=\"number\" ng-model=\"pop.a.cfg.daysback\"></div>\n      </div>\n      <div ng-if=\"pop.a.gen=='Random' && pop.a.type=='datetime'\"><p class=\"cfgsum\">Dùng thời điểm hiện tại (giờ VN).</p></div>\n      <div ng-if=\"pop.a.gen=='Seq'\">\n        <div class=\"fld\"><label>Điểm bắt đầu</label><input type=\"number\" ng-model=\"pop.a.cfg.start\"></div>\n        <div class=\"fld\"><label>Bước nhảy</label><input type=\"number\" ng-model=\"pop.a.cfg.seqstep\"></div>\n        <p class=\"cfgsum\">Số tự nhiên tăng dần, +bước mỗi lần gửi; Lưu đối tượng đặt lại về điểm bắt đầu.</p>\n      </div>\n      <div ng-if=\"pop.a.gen=='List'\">\n        <div class=\"fld\"><label>Danh sách giá trị (phân tách phẩy)</label><input ng-model=\"pop.a.cfg.values\" placeholder=\"open, paid, cancelled\"></div>\n      </div>\n      <div class=\"row grid2\" style=\"margin:14px 0 0\">\n        <button class=\"btn\" ng-click=\"pop.open=false\">Đóng</button>\n        <button class=\"btn primary\" ng-click=\"pop.open=false\">Xong</button>\n      </div>\n    </div>\n  </div>\n</div>\n<script>\n(function(scope){\n  scope.host = scope.host || \"http://reverse-proxy:8456\";\n  scope.count = scope.count || 1; scope.interval = scope.interval || 5;\n  scope.objects = scope.objects || []; scope.keys = scope.keys || []; scope.log = scope.log || [];\n  scope.active = scope.active || {};\n  scope.pop = { open:false, a:{cfg:{}} };\n  function activeNames(){ return scope.objects.filter(function(o){return scope.active[o.name];}).map(function(o){return o.name;}); }\n  function blankAttr(){ return {name:\"\",type:\"text\",gen:\"Random\",cfg:{}}; }\n  scope.newObj = scope.newObj || {name:\"\",model:\"\",key:\"\",attrs:[blankAttr()]};\n  scope.newKey = scope.newKey || {label:\"\",value:\"\"};\n  scope.init = function(){ scope.send({topic:\"load\"}); };\n  scope.addAttr = function(){ scope.newObj.attrs.push(blankAttr()); };\n  scope.delAttr = function(i){ scope.newObj.attrs.splice(i,1); };\n  scope.onGen = function(a){ if(!a.cfg) a.cfg={}; scope.openCfg(a); };\n  scope.openCfg = function(a){ if(!a.cfg) a.cfg={}; scope.pop = { open:true, a:a }; };\n  scope.summary = function(a){ var c=a.cfg||{}; if(a.gen==\"List\") return c.values||\"(chưa nhập)\"; if(a.gen==\"Seq\") return \"từ \"+(c.start||0)+\" bước \"+(c.seqstep||1); if(a.type==\"integer\"||a.type==\"float\") return (c.min||0)+\"-\"+(c.max!=null&&c.max!==\"\"?c.max:\"?\")+\" /\"+(c.step||1); if(a.type==\"text\") return c.template||(\"len \"+(c.maxlen||8)); return \"\"; };\n  scope.saveObj = function(){ scope.send({topic:\"save_object\",payload:angular.copy(scope.newObj)}); };\n  scope.delObj = function(){ if(scope.newObj.name) scope.send({topic:\"delete_object\",payload:scope.newObj.name}); };\n  scope.saveKey = function(){ scope.send({topic:\"save_key\",payload:angular.copy(scope.newKey)}); };\n  scope.delKey = function(){ if(scope.newKey.label) scope.send({topic:\"delete_key\",payload:scope.newKey.label}); };\n  scope.sendOnce = function(){ scope.send({topic:\"send\",payload:{objects:activeNames(),host:scope.host,count:1,interval:0}}); };\n  scope.sendStream = function(){ scope.running=true; scope.send({topic:\"send\",payload:{objects:activeNames(),host:scope.host,count:scope.count,interval:scope.interval}}); };\n  scope.getData = function(){ scope.send({topic:\"get\",payload:{objects:activeNames(),host:scope.host}}); };\n  scope.stop = function(){ scope.running=false; scope.send({topic:\"stop\"}); };\n  scope.$watch(\"msg\", function(m){\n    if(!m||!m.topic) return;\n    if(m.topic===\"state\"){ scope.objects=m.payload.objects||[]; scope.keys=m.payload.keys||[]; }\n    if(m.topic===\"result\"){ var p=m.payload||{}; scope.sent=(scope.sent||0)+1; if(p.op===\"GET\"&&p.full) scope.lastGet=p.full; scope.status=(p.op||\"\")+\" HTTP \"+p.status+\" — \"+p.object+(p.message?(\" · \"+p.message):\"\"); scope.statusOk=p.ok; scope.log.unshift(p); if(scope.log.length>20) scope.log.pop(); }\n  });\n})(scope);\n</script>\n",
+    "storeOutMessages": true,
+    "fwdInMessages": true,
+    "resendOnRefresh": true,
+    "templateScope": "local",
+    "className": "",
+    "x": 830,
+    "y": 80,
+    "wires": [
+      [
+        "d84af11d29d6913b"
+      ]
+    ]
+  },
+  {
+    "id": "d84af11d29d6913b",
+    "type": "function",
+    "z": "c5d34e9ba94dba6e",
+    "name": "router",
+    "func": "let objects = flow.get(\"mdpsim_objects\") || [];\nlet keys = flow.get(\"mdpsim_keys\") || [];\nconst t = msg.topic;\nconst state = () => ({topic:\"state\", payload:{objects, keys}});\nfunction nowVN(){ return new Date(Date.now()+25200000).toISOString().slice(11,19); }\nfunction pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }\nfunction genValue(a, key){\n  const c = a.cfg || {};\n  if(a.gen===\"List\"){ const arr=(c.values||\"\").split(\",\").map(s=>s.trim()).filter(Boolean); return arr.length?pick(arr):\"\"; }\n  if(a.gen===\"Seq\"){ let ctr=flow.get(\"mdpsim_seqctr\")||{}; let start=Number(c.start)||0, step=Number(c.seqstep)||1; let v=(key in ctr)?ctr[key]:start; ctr[key]=v+step; flow.set(\"mdpsim_seqctr\",ctr); return (a.type===\"integer\"||a.type===\"float\")?v:String(v); }\n  const ty=a.type;\n  if(ty===\"integer\"||ty===\"float\"){ let lo=Number(c.min)||0; let hi=(c.max!=null&&c.max!==\"\")?Number(c.max):lo+100; let st=Number(c.step)||(ty===\"integer\"?1:0.01); if(st<=0) st=ty===\"integer\"?1:0.01; if(hi<lo) hi=lo; let steps=Math.floor((hi-lo)/st); let v=lo+st*Math.floor(Math.random()*(steps+1)); return ty===\"integer\"?Math.round(v):Math.round(v*1e6)/1e6; }\n  if(ty===\"date\"){ let d=Number(c.daysback)||0; let tt=Date.now()+25200000-Math.floor(Math.random()*(d+1))*86400000; return new Date(tt).toISOString().slice(0,10); }\n  if(ty===\"datetime\"){ return new Date(Date.now()+25200000).toISOString().slice(0,19); }\n  let tmpl=c.template||\"\";\n  if(tmpl){ let seq=(flow.get(\"mdpsim_seq\")||0)+1; flow.set(\"mdpsim_seq\",seq); tmpl=tmpl.split(\"{seq}\").join(String(seq).padStart(4,\"0\")); tmpl=tmpl.split(\"{rand}\").join(Math.random().toString(36).slice(2,8)); tmpl=tmpl.split(\"{now}\").join(new Date(Date.now()+25200000).toISOString().slice(0,19)); return tmpl; }\n  let n=Number(c.maxlen)||8; let s=\"\"; while(s.length<n) s+=Math.random().toString(36).slice(2); return s.slice(0,n);\n}\nfunction clearTimer(){ const id=flow.get(\"mdpsim_timer\"); if(id){ clearInterval(id); flow.set(\"mdpsim_timer\",null); } }\nfunction clearSeq(name){ let ctr=flow.get(\"mdpsim_seqctr\")||{}; Object.keys(ctr).forEach(k=>{ if(k.indexOf(name+\"|\")===0) delete ctr[k]; }); flow.set(\"mdpsim_seqctr\",ctr); }\nif(t===\"load\") return [state(), null];\nif(t===\"save_object\"){ const o=msg.payload; if(o&&o.name){ objects=objects.filter(x=>x.name!==o.name); objects.push(o); flow.set(\"mdpsim_objects\",objects); clearSeq(o.name); } return [state(), null]; }\nif(t===\"delete_object\"){ objects=objects.filter(x=>x.name!==msg.payload); flow.set(\"mdpsim_objects\",objects); clearSeq(msg.payload); return [state(), null]; }\nif(t===\"save_key\"){ const k=msg.payload; if(k&&k.label){ keys=keys.filter(x=>x.label!==k.label); keys.push(k); flow.set(\"mdpsim_keys\",keys); } return [state(), null]; }\nif(t===\"delete_key\"){ keys=keys.filter(x=>x.label!==msg.payload); flow.set(\"mdpsim_keys\",keys); return [state(), null]; }\nif(t===\"stop\"){ clearTimer(); node.status({fill:\"grey\",shape:\"ring\",text:\"da dung @ \"+nowVN()}); return [{topic:\"result\",payload:{time:nowVN(),object:\"-\",status:\"STOP\",ok:false,op:\"-\",message:\"da dung\"}}, null]; }\nif(t===\"get\"){\n  const p=msg.payload||{};\n  let names = p.objects || [];\n  const targets = names.map(n=>objects.find(x=>x.name===n)).filter(Boolean);\n  if(!targets.length){ node.status({fill:\"yellow\",shape:\"ring\",text:\"chua bat doi tuong\"}); return [{topic:\"result\",payload:{time:nowVN(),object:\"-\",status:\"ERR\",ok:false,op:\"GET\",message:\"chua bat doi tuong nao\"}}, null]; }\n  let host=(p.host||\"\"); while(host.slice(-1)===\"/\") host=host.slice(0,-1);\n  let g=0;\n  targets.forEach(obj=>{\n    const key=keys.find(x=>obj.key&&x.label===obj.key);\n    if(!key){ node.send([{topic:\"result\",payload:{time:nowVN(),object:obj.name,status:\"NOKEY\",ok:false,op:\"GET\",message:\"chua gan API key hop le\"}}, null]); return; }\n    node.send([null, { method:\"GET\", url:host+\"/api/outbound/\"+obj.model, headers:{\"X-API-Key\":key.value}, _meta:{object:obj.name,op:\"GET\"} }]);\n    g++;\n  });\n  node.status({fill:\"blue\",shape:\"dot\",text:\"GET \"+g+\" @ \"+nowVN()});\n  return null;\n}\nif(t===\"send\"){\n  const p=msg.payload||{};\n  let names = p.objects || (p.object?[p.object]:[]);\n  const targets = names.map(n=>objects.find(x=>x.name===n)).filter(Boolean);\n  if(!targets.length){ node.status({fill:\"yellow\",shape:\"ring\",text:\"chua bat doi tuong\"}); return [{topic:\"result\",payload:{time:nowVN(),object:\"-\",status:\"ERR\",ok:false,op:\"POST\",message:\"chua bat doi tuong nao\"}}, null]; }\n  let host=(p.host||\"\"); while(host.slice(-1)===\"/\") host=host.slice(0,-1);\n  const count=Math.max(1, parseInt(p.count)||1);\n  const interval=Math.max(0, parseInt(p.interval)||0);\n  clearTimer();\n  function fireAll(){\n    let sent=0;\n    targets.forEach(obj=>{\n      const key=keys.find(x=>obj.key&&x.label===obj.key);\n      if(!key){ node.send([{topic:\"result\",payload:{time:nowVN(),object:obj.name,status:\"NOKEY\",ok:false,op:\"POST\",message:\"chua gan API key hop le\"}}, null]); return; }\n      const body={};\n      (obj.attrs||[]).forEach(a=>{ if(a&&a.name) body[a.name]=genValue(a, obj.name+\"|\"+a.name); });\n      const hdr={\"Content-Type\":\"application/json\",\"X-API-Key\":key.value};\n      node.send([null, { method:\"POST\", url:host+\"/api/inbound/\"+obj.model, headers:hdr, payload:body, _meta:{object:obj.name,op:\"POST\"} }]);\n      sent++;\n    });\n    node.status({fill:\"blue\",shape:\"dot\",text:\"gui \"+sent+\" @ \"+nowVN()});\n  }\n  fireAll();\n  if(count>1){ let n=1; const id=setInterval(()=>{ n++; fireAll(); if(n>=count){ clearTimer(); } }, (interval*1000)||1000); flow.set(\"mdpsim_timer\",id); }\n  return null;\n}\nreturn null;\n",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1050,
+    "y": 80,
+    "wires": [
+      [
+        "dbe1dfc43590ec36"
+      ],
+      [
+        "bd0db2126af077f0"
+      ]
+    ]
+  },
+  {
+    "id": "bd0db2126af077f0",
+    "type": "http request",
+    "z": "c5d34e9ba94dba6e",
+    "name": "POST/GET",
+    "method": "use",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "ui_tls",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": true,
+    "headers": [],
+    "x": 1070,
+    "y": 150,
+    "wires": [
+      [
+        "457f490875eba545"
+      ]
+    ]
+  },
+  {
+    "id": "457f490875eba545",
+    "type": "function",
+    "z": "c5d34e9ba94dba6e",
+    "name": "format result",
+    "func": "const sc = msg.statusCode || 0;\nconst meta = msg._meta || {};\nlet m=\"\", full=\"\";\ntry{ if(msg.payload&&typeof msg.payload===\"object\"){ const j=JSON.stringify(msg.payload); m=j.slice(0,80); full=j.slice(0,1500); } else if(msg.payload){ m=String(msg.payload).slice(0,80); full=String(msg.payload).slice(0,1500); } }catch(e){}\nconst okk=(sc>=200&&sc<300);\nmsg.topic=\"result\";\nmsg.payload={ time:new Date(Date.now()+25200000).toISOString().slice(11,19), op:meta.op||\"POST\", object:meta.object||\"-\", status:String(sc||\"ERR\"), ok:okk, message:m, full:full };\nnode.status({fill:okk?\"green\":\"red\",shape:\"dot\",text:(meta.op||\"\")+\" \"+(sc||\"ERR\")+\" \"+(meta.object||\"\")});\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1070,
+    "y": 220,
+    "wires": [
+      [
+        "dbe1dfc43590ec36"
+      ]
+    ]
+  },
+  {
+    "id": "seed_inject_p23",
+    "type": "inject",
+    "z": "c5d34e9ba94dba6e",
+    "name": "Seed acc demo objects (8 acc_*)",
+    "props": [],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "0.5",
+    "topic": "",
+    "x": 200,
+    "y": 60,
+    "wires": [
+      [
+        "seed_fn_p23"
+      ]
+    ]
+  },
+  {
+    "id": "seed_fn_p23",
+    "type": "function",
+    "z": "c5d34e9ba94dba6e",
+    "name": "seed demo objects",
+    "func": "// prompt 23 + 25: seed the demo objects so the /ui is reproducible. API key VALUES are added at runtime\n// (never committed); objects only reference key labels. Idempotent: replaces these objects, preserves any\n// others + all keys; resets their Seq counters so a fresh seed yields distinct dim ids.\nlet objects = flow.get(\"mdpsim_objects\") || [];\nconst demo = [\n  // --- prompt 25 accounting demo: 3 dims (Seq) + 5 facts (List FK) ---\n  // (prompt 27: the sim_customer / sim_invoice sales-demo objects were removed together with the\n  //  rest of the sim_* sales demo — streaming sim_reading is unaffected.)\n  {name:\"acc_customer\", model:\"acc_customer\", key:\"acc_in_acc_customer\", attrs:[\n    {name:\"customer_id\",type:\"text\",gen:\"Seq\",cfg:{start:1,seqstep:1}},\n    {name:\"customer_name\",type:\"text\",gen:\"Random\",cfg:{template:\"CUST-{seq}\"}},\n    {name:\"region\",type:\"text\",gen:\"List\",cfg:{values:\"North, Central, South\"}},\n    {name:\"segment\",type:\"text\",gen:\"List\",cfg:{values:\"SME, Enterprise, Retail\"}}]},\n  {name:\"acc_vendor\", model:\"acc_vendor\", key:\"acc_in_acc_vendor\", attrs:[\n    {name:\"vendor_id\",type:\"text\",gen:\"Seq\",cfg:{start:1,seqstep:1}},\n    {name:\"vendor_name\",type:\"text\",gen:\"Random\",cfg:{template:\"VEND-{seq}\"}},\n    {name:\"category\",type:\"text\",gen:\"List\",cfg:{values:\"Material, Logistics, Service, Utility\"}}]},\n  {name:\"acc_account\", model:\"acc_account\", key:\"acc_in_acc_account\", attrs:[\n    {name:\"account_id\",type:\"text\",gen:\"Seq\",cfg:{start:1,seqstep:1}},\n    {name:\"account_name\",type:\"text\",gen:\"Random\",cfg:{template:\"ACC-{seq}\"}},\n    {name:\"account_type\",type:\"text\",gen:\"List\",cfg:{values:\"Asset, Liability, Equity, Revenue, Expense\"}}]},\n  {name:\"acc_invoice\", model:\"acc_invoice\", key:\"acc_in_acc_invoice\", attrs:[\n    {name:\"invoice_no\",type:\"text\",gen:\"Random\",cfg:{template:\"INV-{seq}\"}},\n    {name:\"customer_id\",type:\"text\",gen:\"List\",cfg:{values:\"1,2,3,4,5,6,7,8,9,10\"}},\n    {name:\"issue_date\",type:\"date\",gen:\"Random\",cfg:{daysback:120}},\n    {name:\"due_date\",type:\"date\",gen:\"Random\",cfg:{daysback:90}},\n    {name:\"amount\",type:\"float\",gen:\"Random\",cfg:{min:50,max:5000,step:0.01}},\n    {name:\"tax_amount\",type:\"float\",gen:\"Random\",cfg:{min:0,max:500,step:0.01}},\n    {name:\"status\",type:\"text\",gen:\"List\",cfg:{values:\"open, paid, overdue, cancelled\"}}]},\n  {name:\"acc_receipt\", model:\"acc_receipt\", key:\"acc_in_acc_receipt\", attrs:[\n    {name:\"receipt_no\",type:\"text\",gen:\"Random\",cfg:{template:\"RCP-{seq}\"}},\n    {name:\"customer_id\",type:\"text\",gen:\"List\",cfg:{values:\"1,2,3,4,5,6,7,8,9,10\"}},\n    {name:\"receipt_date\",type:\"date\",gen:\"Random\",cfg:{daysback:90}},\n    {name:\"amount\",type:\"float\",gen:\"Random\",cfg:{min:50,max:5000,step:0.01}},\n    {name:\"method\",type:\"text\",gen:\"List\",cfg:{values:\"cash, bank, card\"}}]},\n  {name:\"acc_bill\", model:\"acc_bill\", key:\"acc_in_acc_bill\", attrs:[\n    {name:\"bill_no\",type:\"text\",gen:\"Random\",cfg:{template:\"BILL-{seq}\"}},\n    {name:\"vendor_id\",type:\"text\",gen:\"List\",cfg:{values:\"1,2,3,4,5,6,7,8\"}},\n    {name:\"issue_date\",type:\"date\",gen:\"Random\",cfg:{daysback:120}},\n    {name:\"due_date\",type:\"date\",gen:\"Random\",cfg:{daysback:90}},\n    {name:\"amount\",type:\"float\",gen:\"Random\",cfg:{min:30,max:4000,step:0.01}},\n    {name:\"status\",type:\"text\",gen:\"List\",cfg:{values:\"open, paid, overdue\"}}]},\n  {name:\"acc_payment\", model:\"acc_payment\", key:\"acc_in_acc_payment\", attrs:[\n    {name:\"payment_no\",type:\"text\",gen:\"Random\",cfg:{template:\"PAY-{seq}\"}},\n    {name:\"vendor_id\",type:\"text\",gen:\"List\",cfg:{values:\"1,2,3,4,5,6,7,8\"}},\n    {name:\"payment_date\",type:\"date\",gen:\"Random\",cfg:{daysback:90}},\n    {name:\"amount\",type:\"float\",gen:\"Random\",cfg:{min:30,max:4000,step:0.01}},\n    {name:\"method\",type:\"text\",gen:\"List\",cfg:{values:\"cash, bank\"}}]},\n  {name:\"acc_journal\", model:\"acc_journal\", key:\"acc_in_acc_journal\", attrs:[\n    {name:\"entry_id\",type:\"text\",gen:\"Random\",cfg:{template:\"JE-{seq}\"}},\n    {name:\"account_id\",type:\"text\",gen:\"List\",cfg:{values:\"1,2,3,4,5,6,7,8\"}},\n    {name:\"entry_date\",type:\"date\",gen:\"Random\",cfg:{daysback:120}},\n    {name:\"debit\",type:\"float\",gen:\"Random\",cfg:{min:0,max:3000,step:0.01}},\n    {name:\"credit\",type:\"float\",gen:\"Random\",cfg:{min:0,max:3000,step:0.01}},\n    {name:\"doc_ref\",type:\"text\",gen:\"Random\",cfg:{template:\"DOC-{seq}\"}}]}\n];\nconst names = demo.map(o=>o.name);\nobjects = objects.filter(o=>!names.includes(o.name)).concat(demo);\nflow.set(\"mdpsim_objects\", objects);\nlet ctr = flow.get(\"mdpsim_seqctr\") || {};\nObject.keys(ctr).forEach(k=>{ if(names.some(n=>k.indexOf(n+\"|\")===0)) delete ctr[k]; });\nflow.set(\"mdpsim_seqctr\", ctr);\nconst keys = flow.get(\"mdpsim_keys\") || [];\nnode.status({fill:\"green\",shape:\"dot\",text:\"seeded \"+demo.length+\" demo objects @ \"+new Date(Date.now()+25200000).toISOString().slice(11,19)});\nreturn {topic:\"state\", payload:{objects, keys}};\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 510,
+    "y": 70,
+    "wires": [
+      [
+        "dbe1dfc43590ec36"
+      ]
+    ]
+  },
+  {
+    "id": "keyseed_inject",
+    "type": "inject",
+    "z": "c5d34e9ba94dba6e",
+    "name": "load acc keys (runtime)",
+    "props": [],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "1.5",
+    "topic": "",
+    "x": 250,
+    "y": 120,
+    "wires": [
+      [
+        "keyseed_fn"
+      ]
+    ]
+  },
+  {
+    "id": "keyseed_fn",
+    "type": "function",
+    "z": "c5d34e9ba94dba6e",
+    "name": "load acc keys",
+    "func": "// prompt 31: load acc inbound key VALUES from the runtime global context `accKeys` (set in settings.js\n// from process.env.MDP_ACC_KEYS — a JSON {label:value}). Values are NEVER committed; set MDP_ACC_KEYS in\n// ops/sim/.env on the host from the bootstrap output.\nlet keys = flow.get('mdpsim_keys') || [];\nlet map = {};\ntry { map = JSON.parse(global.get('accKeys') || '{}'); } catch (e) { map = {}; }\nconst labels = [\"acc_in_acc_customer\",\"acc_in_acc_vendor\",\"acc_in_acc_account\",\"acc_in_acc_invoice\",\"acc_in_acc_receipt\",\"acc_in_acc_bill\",\"acc_in_acc_payment\",\"acc_in_acc_journal\"];\nconst add = labels.filter(l => map[l]).map(l => ({ label: l, value: map[l] }));\nkeys = keys.filter(k => !labels.includes(k.label)).concat(add);\nflow.set('mdpsim_keys', keys);\nnode.status({ fill: add.length ? 'green' : 'yellow', shape: 'dot', text: 'loaded ' + add.length + '/8 acc keys' });\nconst objects = flow.get('mdpsim_objects') || [];\nreturn { topic: 'state', payload: { objects, keys } };\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 510,
+    "y": 120,
+    "wires": [
+      [
+        "dbe1dfc43590ec36"
+      ]
+    ]
+  }
+]

@@ -1,0 +1,4 @@
+# Never commit the real env (holds the credential secret + the acc key VALUES).
+.env
+# The bootstrap writes the acc key VALUES here (runtime only).
+.acc_keys.json

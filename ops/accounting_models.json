@@ -1,0 +1,938 @@
+[
+  {
+    "name": "acc_account",
+    "display_name": "acc_account",
+    "type": "A",
+    "domain": "finance",
+    "source_layer": "generated_table",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "account_id",
+    "attributes": [
+      {
+        "name": "account_id",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "account_name",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "account_type",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false
+  },
+  {
+    "name": "acc_customer",
+    "display_name": "acc_customer",
+    "type": "A",
+    "domain": "finance",
+    "source_layer": "generated_table",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "customer_id",
+    "attributes": [
+      {
+        "name": "customer_id",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "customer_name",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "region",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "segment",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false
+  },
+  {
+    "name": "acc_vendor",
+    "display_name": "acc_vendor",
+    "type": "A",
+    "domain": "finance",
+    "source_layer": "generated_table",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "vendor_id",
+    "attributes": [
+      {
+        "name": "vendor_id",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "vendor_name",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "category",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false
+  },
+  {
+    "name": "acc_bill",
+    "display_name": "acc_bill",
+    "type": "A",
+    "domain": "finance",
+    "source_layer": "generated_table",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "bill_no",
+    "attributes": [
+      {
+        "name": "bill_no",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "vendor_id",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "issue_date",
+        "data_type": "date",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "due_date",
+        "data_type": "date",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "amount",
+        "data_type": "float",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "status",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false
+  },
+  {
+    "name": "acc_invoice",
+    "display_name": "acc_invoice",
+    "type": "A",
+    "domain": "finance",
+    "source_layer": "generated_table",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "invoice_no",
+    "attributes": [
+      {
+        "name": "invoice_no",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "customer_id",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "issue_date",
+        "data_type": "date",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "due_date",
+        "data_type": "date",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "amount",
+        "data_type": "float",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "tax_amount",
+        "data_type": "float",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "status",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false
+  },
+  {
+    "name": "acc_journal",
+    "display_name": "acc_journal",
+    "type": "A",
+    "domain": "finance",
+    "source_layer": "generated_table",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "entry_id",
+    "attributes": [
+      {
+        "name": "entry_id",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "account_id",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "entry_date",
+        "data_type": "date",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "debit",
+        "data_type": "float",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "credit",
+        "data_type": "float",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "doc_ref",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false
+  },
+  {
+    "name": "acc_payment",
+    "display_name": "acc_payment",
+    "type": "A",
+    "domain": "finance",
+    "source_layer": "generated_table",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "payment_no",
+    "attributes": [
+      {
+        "name": "payment_no",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "vendor_id",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "payment_date",
+        "data_type": "date",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "amount",
+        "data_type": "float",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "method",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false
+  },
+  {
+    "name": "acc_receipt",
+    "display_name": "acc_receipt",
+    "type": "A",
+    "domain": "finance",
+    "source_layer": "generated_table",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "receipt_no",
+    "attributes": [
+      {
+        "name": "receipt_no",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "customer_id",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "receipt_date",
+        "data_type": "date",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "amount",
+        "data_type": "float",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "method",
+        "data_type": "text",
+        "required": false,
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false
+  },
+  {
+    "name": "acc_ap_360",
+    "display_name": "acc_ap_360",
+    "type": "B",
+    "domain": "finance",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "bill_no",
+    "attributes": [
+      {
+        "name": "bill_no",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_bill",
+        "source_column": "bill_no",
+        "is_primary_key": true,
+        "is_foreign_key": false
+      },
+      {
+        "name": "vendor_id",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_bill",
+        "source_column": "vendor_id",
+        "is_primary_key": false,
+        "is_foreign_key": true
+      },
+      {
+        "name": "vendor_name",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_vendor",
+        "source_column": "vendor_name",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "category",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_vendor",
+        "source_column": "category",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "amount",
+        "data_type": "float",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_bill",
+        "source_column": "amount",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "status",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_bill",
+        "source_column": "status",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "issue_date",
+        "data_type": "date",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_bill",
+        "source_column": "issue_date",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "due_date",
+        "data_type": "date",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_bill",
+        "source_column": "due_date",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "relationships": [
+      {
+        "left": {
+          "table": "dm_acc_bill",
+          "column": "vendor_id"
+        },
+        "type": "left",
+        "right": {
+          "table": "dm_acc_vendor",
+          "column": "vendor_id",
+          "schema": "mdp_data"
+        }
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false,
+    "matview_enabled": true,
+    "matview_refresh_interval_sec": 300
+  },
+  {
+    "name": "acc_ar_360",
+    "display_name": "acc_ar_360",
+    "type": "B",
+    "domain": "finance",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "invoice_no",
+    "attributes": [
+      {
+        "name": "invoice_no",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_invoice",
+        "source_column": "invoice_no",
+        "is_primary_key": true,
+        "is_foreign_key": false
+      },
+      {
+        "name": "customer_id",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_invoice",
+        "source_column": "customer_id",
+        "is_primary_key": false,
+        "is_foreign_key": true
+      },
+      {
+        "name": "customer_name",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_customer",
+        "source_column": "customer_name",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "region",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_customer",
+        "source_column": "region",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "segment",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_customer",
+        "source_column": "segment",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "amount",
+        "data_type": "float",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_invoice",
+        "source_column": "amount",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "tax_amount",
+        "data_type": "float",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_invoice",
+        "source_column": "tax_amount",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "status",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_invoice",
+        "source_column": "status",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "issue_date",
+        "data_type": "date",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_invoice",
+        "source_column": "issue_date",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "due_date",
+        "data_type": "date",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_invoice",
+        "source_column": "due_date",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "relationships": [
+      {
+        "left": {
+          "table": "dm_acc_invoice",
+          "column": "customer_id"
+        },
+        "type": "left",
+        "right": {
+          "table": "dm_acc_customer",
+          "column": "customer_id",
+          "schema": "mdp_data"
+        }
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false,
+    "matview_enabled": true,
+    "matview_refresh_interval_sec": 300
+  },
+  {
+    "name": "acc_gl_report",
+    "display_name": "acc_gl_report",
+    "type": "B",
+    "domain": "finance",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "entry_id",
+    "attributes": [
+      {
+        "name": "entry_id",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_journal",
+        "source_column": "entry_id",
+        "is_primary_key": true,
+        "is_foreign_key": false
+      },
+      {
+        "name": "account_id",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_journal",
+        "source_column": "account_id",
+        "is_primary_key": false,
+        "is_foreign_key": true
+      },
+      {
+        "name": "account_name",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_account",
+        "source_column": "account_name",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "account_type",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_account",
+        "source_column": "account_type",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "debit",
+        "data_type": "float",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_journal",
+        "source_column": "debit",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "credit",
+        "data_type": "float",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_journal",
+        "source_column": "credit",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "entry_date",
+        "data_type": "date",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_journal",
+        "source_column": "entry_date",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "relationships": [
+      {
+        "left": {
+          "table": "dm_acc_journal",
+          "column": "account_id"
+        },
+        "type": "left",
+        "right": {
+          "table": "dm_acc_account",
+          "column": "account_id",
+          "schema": "mdp_data"
+        }
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false,
+    "matview_enabled": true,
+    "matview_refresh_interval_sec": 300
+  },
+  {
+    "name": "acc_payments_enriched",
+    "display_name": "acc_payments_enriched",
+    "type": "B",
+    "domain": "finance",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "payment_no",
+    "attributes": [
+      {
+        "name": "payment_no",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_payment",
+        "source_column": "payment_no",
+        "is_primary_key": true,
+        "is_foreign_key": false
+      },
+      {
+        "name": "vendor_id",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_payment",
+        "source_column": "vendor_id",
+        "is_primary_key": false,
+        "is_foreign_key": true
+      },
+      {
+        "name": "vendor_name",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_vendor",
+        "source_column": "vendor_name",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "payment_date",
+        "data_type": "date",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_payment",
+        "source_column": "payment_date",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "amount",
+        "data_type": "float",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_payment",
+        "source_column": "amount",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "method",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_payment",
+        "source_column": "method",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "relationships": [
+      {
+        "left": {
+          "table": "dm_acc_payment",
+          "column": "vendor_id"
+        },
+        "type": "left",
+        "right": {
+          "table": "dm_acc_vendor",
+          "column": "vendor_id",
+          "schema": "mdp_data"
+        }
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false,
+    "matview_enabled": true,
+    "matview_refresh_interval_sec": 300
+  },
+  {
+    "name": "acc_receipts_enriched",
+    "display_name": "acc_receipts_enriched",
+    "type": "B",
+    "domain": "finance",
+    "canonical_status": "experimental",
+    "site_scope": "enterprise",
+    "primary_key": "receipt_no",
+    "attributes": [
+      {
+        "name": "receipt_no",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_receipt",
+        "source_column": "receipt_no",
+        "is_primary_key": true,
+        "is_foreign_key": false
+      },
+      {
+        "name": "customer_id",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_receipt",
+        "source_column": "customer_id",
+        "is_primary_key": false,
+        "is_foreign_key": true
+      },
+      {
+        "name": "customer_name",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_customer",
+        "source_column": "customer_name",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "region",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_customer",
+        "source_column": "region",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "receipt_date",
+        "data_type": "date",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_receipt",
+        "source_column": "receipt_date",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "amount",
+        "data_type": "float",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_receipt",
+        "source_column": "amount",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "method",
+        "data_type": "text",
+        "required": false,
+        "source_schema": "mdp_data",
+        "source_table": "dm_acc_receipt",
+        "source_column": "method",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "relationships": [
+      {
+        "left": {
+          "table": "dm_acc_receipt",
+          "column": "customer_id"
+        },
+        "type": "left",
+        "right": {
+          "table": "dm_acc_customer",
+          "column": "customer_id",
+          "schema": "mdp_data"
+        }
+      }
+    ],
+    "sensitivity_level": "internal",
+    "ai_enabled": true,
+    "status": "active",
+    "latest_only": false,
+    "matview_enabled": true,
+    "matview_refresh_interval_sec": 300
+  }
+]
