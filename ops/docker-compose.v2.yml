@@ -52,6 +52,12 @@ services:
       # that have an auto-refresh interval set, so it is near-free; set false to globally pause).
       MATVIEW_REFRESH_ENABLED: ${MATVIEW_REFRESH_ENABLED:-true}
       MATVIEW_REFRESH_INTERVAL: ${MATVIEW_REFRESH_INTERVAL:-30}
+      # prompt 28 (apikey reveal, option ii): APIKEY_ENC_KEY is the secret that encrypts the key value
+      # at rest so it can be re-viewed. Supplied from ops/.env (NEVER committed). Empty/unset = reveal
+      # feature OFF (keys stay hash-only; auth unaffected). APIKEY_VIEW_PASSWORD is the level-2 friction
+      # gate (default 0000 — friction, not real security on a public repo).
+      APIKEY_ENC_KEY: ${APIKEY_ENC_KEY:-}
+      APIKEY_VIEW_PASSWORD: ${APIKEY_VIEW_PASSWORD:-0000}
     volumes:
       # prompt 10: shared ora2pg scripts dir. The backend WRITES the generated perl scripts (probe_cols.pl,
       # discover_keys.pl, source_*.pl) here at runtime; an ora2pg container mounts the same named volume at

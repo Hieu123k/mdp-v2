@@ -1,9 +1,11 @@
+import base64
 import hashlib
 import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -15,6 +17,8 @@ from app.schemas.api_key import ApiKeyCreate, ApiKeyUpdate
 
 API_KEY_PREFIX = "mdp_live_"
 VISIBLE_PREFIX_LENGTH = 16
+# prompt 28: current encryption-scheme version stamped into key_enc_ver (for future rotation).
+KEY_ENC_VERSION = 1
 
 
 @dataclass
@@ -35,6 +39,16 @@ class ApiKeyScopeError(Exception):
     pass
 
 
+class ApiKeyRevealError(Exception):
+    """Reveal could not proceed (wrong level-2 password / feature off / undecryptable). Carries an HTTP
+    status so the endpoint can surface a clean 4xx/5xx without leaking the key."""
+
+    def __init__(self, message: str, *, status_code: int = 400) -> None:
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+
+
 def generate_plain_api_key() -> str:
     return f"{API_KEY_PREFIX}{secrets.token_urlsafe(32)}"
 
@@ -42,6 +56,48 @@ def generate_plain_api_key() -> str:
 def hash_api_key(api_key: str) -> str:
     material = f"{settings.jwt_secret_key}:{api_key}".encode("utf-8")
     return hashlib.sha256(material).hexdigest()
+
+
+# --- prompt 28 (option ii): reversible encryption of the key VALUE at rest, mirroring connection_service.
+def reveal_enabled() -> bool:
+    """True when APIKEY_ENC_KEY is configured — i.e. new keys store an encrypted value and can be revealed."""
+    return bool(settings.apikey_enc_key)
+
+
+def _fernet() -> Fernet:
+    key = base64.urlsafe_b64encode(hashlib.sha256(settings.apikey_enc_key.encode("utf-8")).digest())
+    return Fernet(key)
+
+
+def encrypt_key_value(plain_key: str) -> str | None:
+    """Fernet-encrypt the plaintext key for at-rest storage. Returns None (don't store) when the reveal
+    feature is off, so auth/creation are unaffected."""
+    if not reveal_enabled():
+        return None
+    return _fernet().encrypt(plain_key.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_key_value(token: str) -> str:
+    return _fernet().decrypt(token.encode("utf-8")).decode("utf-8")
+
+
+def reveal_api_key(api_key: ApiKey, password: str) -> str | None:
+    """Return the plaintext key after the level-2 password check. Returns None when the key is hash-only
+    (created before this feature → not re-viewable). Raises ApiKeyRevealError on a wrong password (403),
+    a disabled/misconfigured feature (503), or an undecryptable token (409) — never leaking the key."""
+    # constant-time compare so the gate can't be probed by timing
+    if not secrets.compare_digest(password or "", settings.apikey_view_password):
+        raise ApiKeyRevealError("Incorrect level-2 password.", status_code=403)
+    if not api_key.key_value_enc:
+        return None  # hash-only legacy key — nothing to decrypt
+    if not reveal_enabled():
+        raise ApiKeyRevealError("Key reveal is not configured on this server.", status_code=503)
+    try:
+        return decrypt_key_value(api_key.key_value_enc)
+    except InvalidToken as exc:
+        raise ApiKeyRevealError(
+            "Stored key could not be decrypted (encryption key changed).", status_code=409
+        ) from exc
 
 
 def get_key_prefix(api_key: str) -> str:
@@ -54,11 +110,16 @@ def create_api_key(
     created_by: uuid.UUID | None,
 ) -> tuple[ApiKey, str]:
     plain_key = generate_plain_api_key()
+    # prompt 28: store the encrypted value too (when the reveal feature is on) so it can be re-viewed.
+    # encrypt_key_value returns None when the feature is off -> key stays hash-only, exactly as before.
+    key_value_enc = encrypt_key_value(plain_key)
     api_key = ApiKey(
         name=api_key_in.name,
         description=api_key_in.description,
         key_prefix=get_key_prefix(plain_key),
         hashed_key=hash_api_key(plain_key),
+        key_value_enc=key_value_enc,
+        key_enc_ver=KEY_ENC_VERSION if key_value_enc else None,
         source_system=api_key_in.source_system,
         allowed_directions=list(api_key_in.allowed_directions),
         allowed_models=api_key_in.allowed_models,

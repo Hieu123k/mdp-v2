@@ -46,9 +46,21 @@ class ApiKeyRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_used_at: datetime | None
+    # prompt 28: whether the key value is stored encrypted and can be revealed with the level-2 password.
+    revealable: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class ApiKeyCreateResponse(ApiKeyRead):
     api_key: str
+
+
+class ApiKeyRevealRequest(BaseModel):
+    password: str = Field(min_length=1)
+
+
+class ApiKeyRevealResponse(BaseModel):
+    available: bool
+    api_key: str | None = None
+    reason: str | None = None

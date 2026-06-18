@@ -18,8 +18,10 @@ import {
   deleteApiKey,
   listApiKeys,
   listDataModels,
+  revealApiKey,
   updateApiKey,
   type ApiKey,
+  type ApiKeyReveal,
   type DataModel,
 } from "@/lib/api";
 
@@ -112,6 +114,32 @@ export default function ApiKeysPage() {
     }
   }
 
+  // prompt 28: reveal a key value behind the level-2 password.
+  const [reveal, setReveal] = useState<ApiKey | null>(null);
+  const [revealPass, setRevealPass] = useState("");
+  const [revealBusy, setRevealBusy] = useState(false);
+  const [revealErr, setRevealErr] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState<ApiKeyReveal | null>(null);
+
+  function openReveal(k: ApiKey) {
+    setReveal(k);
+    setRevealPass("");
+    setRevealErr(null);
+    setRevealed(null);
+  }
+  async function submitReveal() {
+    if (!reveal) return;
+    setRevealBusy(true);
+    setRevealErr(null);
+    try {
+      setRevealed(await revealApiKey(reveal.id, revealPass));
+    } catch (e) {
+      setRevealErr(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setRevealBusy(false);
+    }
+  }
+
   async function toggleActive(k: ApiKey) {
     try {
       await updateApiKey(k.id, { is_active: !k.is_active });
@@ -184,6 +212,9 @@ export default function ApiKeysPage() {
                     </TD>
                     <TD>
                       <div className="flex gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => openReveal(k)}>
+                          View key
+                        </Button>
                         <Button size="sm" variant="secondary" onClick={() => toggleActive(k)}>
                           {k.is_active ? "Disable" : "Enable"}
                         </Button>
@@ -293,7 +324,7 @@ export default function ApiKeysPage() {
       >
         <div className="space-y-3">
           <div className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
-            Copy this key now - it is shown <strong>only once</strong> and cannot be retrieved later.
+            Copy this key now. You can also re-view it later via <strong>View key</strong> using the level-2 password.
           </div>
           <p className="text-sm text-neutral-500">Key for <span className="font-semibold">{created?.name}</span>:</p>
           <code className="block break-all rounded-md bg-neutral-900 px-3 py-2 font-mono text-xs text-white">
@@ -308,6 +339,68 @@ export default function ApiKeysPage() {
           >
             Copy
           </Button>
+        </div>
+      </Modal>
+
+      {/* View key (level-2 password reveal) */}
+      <Modal
+        open={reveal !== null}
+        onClose={() => setReveal(null)}
+        title={`View key${reveal ? ` — ${reveal.name}` : ""}`}
+        footer={
+          revealed?.available ? (
+            <Button onClick={() => setReveal(null)}>Done</Button>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={() => setReveal(null)}>
+                Cancel
+              </Button>
+              <Button onClick={submitReveal} disabled={revealBusy}>
+                {revealBusy ? "Checking..." : "Reveal"}
+              </Button>
+            </>
+          )
+        }
+      >
+        <div className="space-y-3">
+          {revealed === null ? (
+            <>
+              <p className="text-sm text-neutral-500">Enter the level-2 password to reveal this key.</p>
+              {revealErr && <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">{revealErr}</p>}
+              <Input
+                label="Level-2 password"
+                type="password"
+                value={revealPass}
+                onChange={(e) => setRevealPass(e.target.value)}
+                placeholder="••••"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitReveal();
+                }}
+              />
+            </>
+          ) : revealed.available && revealed.api_key ? (
+            <>
+              <p className="text-sm text-neutral-500">
+                Key for <span className="font-semibold">{reveal?.name}</span>:
+              </p>
+              <code className="block break-all rounded-md bg-neutral-900 px-3 py-2 font-mono text-xs text-white">
+                {revealed.api_key}
+              </code>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  if (revealed.api_key) navigator.clipboard?.writeText(revealed.api_key).catch(() => {});
+                }}
+              >
+                Copy
+              </Button>
+            </>
+          ) : (
+            <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
+              {revealed.reason || "Not available."}
+            </p>
+          )}
         </div>
       </Modal>
     </>

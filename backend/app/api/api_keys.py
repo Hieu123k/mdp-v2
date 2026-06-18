@@ -8,12 +8,21 @@ from app.api.deps import get_current_user, require_permission
 from app.db.session import get_db
 from app.models.api_key import ApiKey
 from app.models.user import User
-from app.schemas.api_key import ApiKeyCreate, ApiKeyCreateResponse, ApiKeyRead, ApiKeyUpdate
+from app.schemas.api_key import (
+    ApiKeyCreate,
+    ApiKeyCreateResponse,
+    ApiKeyRead,
+    ApiKeyRevealRequest,
+    ApiKeyRevealResponse,
+    ApiKeyUpdate,
+)
 from app.services.api_key_service import (
+    ApiKeyRevealError,
     create_api_key,
     delete_api_key,
     get_api_key,
     list_api_keys,
+    reveal_api_key,
     update_api_key,
 )
 
@@ -56,6 +65,33 @@ def get_api_key_endpoint(
     if api_key is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
     return api_key
+
+
+@router.post(
+    "/{api_key_id}/reveal",
+    response_model=ApiKeyRevealResponse,
+    dependencies=[Depends(require_permission("api_key.create"))],
+)
+def reveal_api_key_endpoint(
+    api_key_id: uuid.UUID,
+    body: ApiKeyRevealRequest,
+    db: Annotated[Session, Depends(get_db)],
+) -> ApiKeyRevealResponse:
+    """Reveal a key's value behind the level-2 password (prompt 28). Wrong password → 4xx (no leak).
+    A key created before this feature (hash-only) → available=false with a reason, not an error."""
+    api_key = get_api_key(db, api_key_id)
+    if api_key is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+    try:
+        plain_key = reveal_api_key(api_key, body.password)
+    except ApiKeyRevealError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+    if plain_key is None:
+        return ApiKeyRevealResponse(
+            available=False,
+            reason="Not available — this key was created before the reveal feature.",
+        )
+    return ApiKeyRevealResponse(available=True, api_key=plain_key)
 
 
 @router.put("/{api_key_id}", response_model=ApiKeyRead)

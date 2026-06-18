@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON, Uuid
@@ -21,6 +21,11 @@ class ApiKey(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     key_prefix: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     hashed_key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    # prompt 28 (option ii): the key value encrypted-at-rest (Fernet token) so it can be re-viewed with
+    # the level-2 password. NULL for keys created before this feature (hash-only → not re-viewable).
+    # key_enc_ver marks the encryption scheme version for future key rotation.
+    key_value_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    key_enc_ver: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_system: Mapped[str | None] = mapped_column(String(150), nullable=True)
     allowed_directions: Mapped[list[str]] = mapped_column(jsonb_type, nullable=False)
     allowed_models: Mapped[list[str] | None] = mapped_column(jsonb_type, nullable=True)
@@ -30,3 +35,8 @@ class ApiKey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    @property
+    def revealable(self) -> bool:
+        """True when the key value is stored encrypted (so it can be revealed with the level-2 password)."""
+        return self.key_value_enc is not None

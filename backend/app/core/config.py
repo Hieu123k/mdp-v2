@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     connection_secret_key: str = "change_me_connection_secret_key"
     postgres_password: str | None = None
 
+    # --- API-key reveal (prompt 28, option ii) ---
+    # APIKEY_ENC_KEY: secret used to derive the Fernet key that encrypts the API-key value AT REST so it
+    # can be re-viewed later. Empty (default) = reveal feature OFF — keys stay hash-only, auth is
+    # unaffected. Supplied via env only (never committed). apikey_view_password: the "level-2" friction
+    # gate before a reveal — default "0000". NOTE: on a public repo this is friction, NOT real security.
+    apikey_enc_key: str = ""
+    apikey_view_password: str = "0000"
+
     # --- ora2pg Migration Dashboard v0.0 (additive; all from env, no hardcoded creds) ---
     # Oracle JDE source. Empty on environments that cannot reach Oracle (e.g. the VPS sandbox);
     # the dashboard fails gracefully and reports the connection error without crashing.

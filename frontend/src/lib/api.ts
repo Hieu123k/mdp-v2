@@ -528,8 +528,11 @@ export type ApiKey = {
   created_at: string;
   updated_at: string;
   last_used_at: string | null;
+  /** prompt 28: key value is stored encrypted and can be revealed with the level-2 password. */
+  revealable?: boolean;
 };
 export type ApiKeyCreated = ApiKey & { api_key: string };
+export type ApiKeyReveal = { available: boolean; api_key: string | null; reason: string | null };
 export const listApiKeys = () => req<ApiKey[]>("/api-keys");
 export const createApiKey = (body: {
   name: string;
@@ -545,6 +548,9 @@ export const updateApiKey = (
 /** Hard-delete the key (backend de-references its transactions to keep the audit log). 204. */
 export const deleteApiKey = (id: string) =>
   req<void>(`/api-keys/${id}`, { method: "DELETE" });
+/** prompt 28: reveal a key's value behind the level-2 password. Wrong password → 4xx (ApiError). */
+export const revealApiKey = (id: string, password: string) =>
+  req<ApiKeyReveal>(`/api-keys/${id}/reveal`, { method: "POST", body: JSON.stringify({ password }) });
 
 // Connections
 export const CONNECTION_TYPES = ["postgresql", "oracle", "sqlserver", "rest_api", "mqtt"] as const;
