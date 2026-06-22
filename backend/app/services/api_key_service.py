@@ -29,6 +29,7 @@ class AuthContext:
     source_system: str | None = None
     allowed_directions: list[str] | None = None
     allowed_models: list[str] | None = None
+    role: str | None = None  # prompt 36 (P0-4): the JWT user's role, for integration-API RBAC
 
 
 class ApiKeyAuthError(Exception):

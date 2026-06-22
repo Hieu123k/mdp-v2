@@ -100,6 +100,12 @@ def require_permission(permission_key: str) -> Callable[..., User]:
     return _checker
 
 
+# P0-4 (prompt 36): roles allowed to use the integration API (/inbound, /outbound) via a human JWT.
+# A read-only `viewer` is intentionally excluded — it reads through the FE/admin endpoints, not the
+# api-key integration surface. (Narrow this set, or move to a permission key, per admin policy.)
+INTEGRATION_JWT_ROLES = {"admin", "data_engineer", "api_manager"}
+
+
 def get_request_auth_context(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     db: Annotated[Session, Depends(get_db)],
@@ -115,7 +121,16 @@ def get_request_auth_context(
             if user_id is not None:
                 user = get_user(db, user_id)
                 if user is not None and user.is_active:
-                    return AuthContext(auth_type="jwt", user_id=user.id)
+                    # P0-4 (prompt 36): the integration API (inbound/outbound) is api-key territory.
+                    # Previously ANY active JWT — incl. a read-only `viewer` — bypassed api-key scope
+                    # entirely. Restrict the JWT path to integration-capable roles; everyone else 403.
+                    # (api-key auth, and its allowed_directions/allowed_models scope, is unchanged.)
+                    if user.role not in INTEGRATION_JWT_ROLES:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Your role is not permitted to use the integration API",
+                        )
+                    return AuthContext(auth_type="jwt", user_id=user.id, role=user.role)
 
     if x_api_key:
         try:
