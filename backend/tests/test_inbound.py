@@ -23,6 +23,11 @@ def create_sqlite_generated_table(db_session: Session, table_name: str = "dm_inv
             """
         )
     )
+    # prompt 36 (P0-1): mirror the production table — a UNIQUE index on the business key (invoice_no) so
+    # inbound's INSERT … ON CONFLICT (invoice_no) DO UPDATE has its conflict target.
+    db_session.execute(
+        text(f"CREATE UNIQUE INDEX IF NOT EXISTS mdp_data.ux_{table_name}_bk ON {table_name}(invoice_no)")
+    )
     db_session.commit()
 
 

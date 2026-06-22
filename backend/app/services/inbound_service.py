@@ -12,8 +12,10 @@ from app.services.api_key_service import AuthContext
 from app.services.data_model_service import get_data_model_by_name
 from app.services.table_generator import (
     TableGenerationError,
+    business_key_columns,
     get_generated_table_name,
     quote_identifier,
+    timestamp_default_clause,
     validate_generated_column_names,
     validate_identifier,
 )
@@ -136,12 +138,33 @@ def insert_inbound_record(
             params[param_name] = value
 
     quoted_table = f"{quote_identifier(schema_name)}.{quote_identifier(bare_table_name)}"
+    # P0-1 (prompt 36): UPSERT on the business key when the model has one, so re-sending the same key
+    # replaces the row instead of appending a duplicate (which fanned out Type B JOINs and broke matview
+    # refresh). Keyless models keep the plain append-only INSERT. `id` and `created_at` are never changed
+    # on conflict; raw_payload + the mapped columns + updated_at are refreshed.
+    conflict_sql = ""
+    pk_cols = business_key_columns(model)
+    if pk_cols:
+        pk_set = set(pk_cols)
+        updated_at_expr = timestamp_default_clause(db) if is_postgres else "CURRENT_TIMESTAMP"
+        set_parts = ['"raw_payload" = EXCLUDED."raw_payload"']
+        set_parts += [
+            f"{quote_identifier(name)} = EXCLUDED.{quote_identifier(name)}"
+            for name in mapped_values
+            if name not in pk_set
+        ]
+        set_parts.append(f'"updated_at" = {updated_at_expr}')
+        conflict_target = ", ".join(quote_identifier(col) for col in pk_cols)
+        conflict_sql = f" ON CONFLICT ({conflict_target}) DO UPDATE SET {', '.join(set_parts)}"
+
     statement = text(
         f"INSERT INTO {quoted_table} ({', '.join(columns)}) "
-        f"VALUES ({', '.join(values)})"
+        f"VALUES ({', '.join(values)}){conflict_sql} RETURNING \"id\""
     )
-    db.execute(statement, params)
-    return record_id
+    returned = db.execute(statement, params).scalar()
+    if returned is None:
+        return record_id
+    return returned if isinstance(returned, uuid.UUID) else uuid.UUID(str(returned))
 
 
 def receive_inbound_payload(
@@ -179,7 +202,7 @@ def receive_inbound_payload(
         raise ValueError("Inbound API is only supported for Type A data models")
 
     try:
-        # TODO: Add upsert_by_key behavior in a later milestone.
+        # Upserts on the business key when the model has a primary_key (prompt 36 P0-1); otherwise appends.
         record_id = insert_inbound_record(db, model, payload)
         response_payload = {
             "status": "success",

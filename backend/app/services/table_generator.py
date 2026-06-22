@@ -1,3 +1,4 @@
+import hashlib
 import re
 from typing import Any
 
@@ -137,7 +138,53 @@ def create_generated_table_for_model(db: Session, model: Any) -> str:
     # — so existing data survives. (New attribute columns on a reused table are added later via
     # sync_generated_table_columns / update; this call never drops or truncates.)
     db.execute(text(f"CREATE TABLE IF NOT EXISTS {quoted_table_name} ({', '.join(columns)})"))
+    # P0-1 (prompt 36): enforce the business key physically so inbound can UPSERT on it. No-op for
+    # keyless models. The surrogate "id" UUID stays the table PRIMARY KEY (the business key is a
+    # separate UNIQUE index, never the PK).
+    ensure_business_key_unique_index(db, model)
     return table_name
+
+
+def business_key_columns(model: Any) -> list[str]:
+    """The business-key column(s) from ``model.primary_key`` (comma-separated → composite). Each must be a
+    real stored attribute and a safe identifier — raises TableGenerationError otherwise (the prompt-36 STOP
+    condition). Returns [] when no primary_key is configured (keyless → append-only)."""
+    pk = (getattr(model, "primary_key", None) or "").strip()
+    if not pk:
+        return []
+    attr_names = {attribute["name"] for attribute in model.attributes}
+    cols = [c.strip() for c in pk.split(",") if c.strip()]
+    for col in cols:
+        if col not in attr_names:
+            raise TableGenerationError(
+                f"primary_key '{col}' is not a stored attribute column of model '{model.name}' — "
+                "cannot enforce a UNIQUE business key"
+            )
+        validate_identifier(col, "primary key column")
+    return cols
+
+
+def business_key_index_name(table_name: str) -> str:
+    """Deterministic, collision-free (<=63-char) name for a table's business-key UNIQUE index (one per
+    table, so a per-table hash never collides — unlike the truncated matview index names)."""
+    return "ux_bk_" + hashlib.sha1(table_name.encode("utf-8")).hexdigest()[:16]
+
+
+def ensure_business_key_unique_index(db: Session, model: Any) -> str | None:
+    """Create the UNIQUE index backing ``model.primary_key`` if it isn't there yet. Returns the index name
+    (or None for keyless models / non-postgres). Idempotent (IF NOT EXISTS)."""
+    if db.bind and db.bind.dialect.name != "postgresql":
+        return None
+    cols = business_key_columns(model)
+    if not cols:
+        return None
+    table_name = getattr(model, "generated_table", None) or get_generated_table_name(model.name)
+    schema_name, bare_table_name = table_name.split(".", 1)
+    quoted_table = f"{quote_identifier(schema_name)}.{quote_identifier(bare_table_name)}"
+    index_name = business_key_index_name(table_name)
+    col_list = ", ".join(quote_identifier(col) for col in cols)
+    db.execute(text(f'CREATE UNIQUE INDEX IF NOT EXISTS "{index_name}" ON {quoted_table} ({col_list})'))
+    return index_name
 
 
 def sync_generated_table_columns(db: Session, model: Any) -> list[str]:
@@ -152,10 +199,13 @@ def sync_generated_table_columns(db: Session, model: Any) -> list[str]:
     """
     if db.bind and db.bind.dialect.name != "postgresql":
         return []
-    if not generated_table_exists(db, model.name):
+    # P0-3 (prompt 36): sync the PERSISTED physical table, not model.name. A model rename never renames
+    # the table (generated_table stays put), so resolving by model.name would look for a non-existent
+    # dm_<newname>, silently skip the column add, and leave inbound/outbound 500-ing on the new attribute.
+    table_name = getattr(model, "generated_table", None) or get_generated_table_name(model.name)
+    if db.execute(text("SELECT to_regclass(:t) IS NULL"), {"t": table_name}).scalar():
         return []
     validate_generated_column_names(model.attributes)
-    table_name = get_generated_table_name(model.name)
     schema_name, bare_table_name = table_name.split(".", 1)
     existing = {
         row[0]
