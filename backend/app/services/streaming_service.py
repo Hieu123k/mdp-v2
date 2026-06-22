@@ -98,6 +98,25 @@ def build_streaming_predicate(
     return f"{view_u}[{col} >= {cutoff}]"
 
 
+def _today_julian() -> int:
+    """JDE CYYDDD julian for today (UTC date): (year-1900)*1000 + day-of-year (2026-06-22 -> 126173)."""
+    d = datetime.now(timezone.utc).date()
+    return (d.year - 1900) * 1000 + d.timetuple().tm_yday
+
+
+def clamp_day_cursor(value: str | None, granularity: str, sequence: bool) -> str | None:
+    """P0-2 (prompt 36): a date/UPMJ watermark is the target's MAX(ts_col), which can contain a
+    FUTURE-dated row → the cursor jumps past today and every row dated today is ``< cutoff`` and is
+    silently skipped forever. Clamp the ``day`` cursor so it never exceeds today's julian. Sequence
+    (monotonic ``col > c``) and timestamp modes are left unchanged."""
+    if sequence or granularity != "day" or value is None:
+        return value
+    try:
+        return str(min(int(value), _today_julian()))
+    except (TypeError, ValueError):
+        return value
+
+
 # --- config CRUD -----------------------------------------------------------------------------
 
 def get_config(db: Session, source_view: str) -> StreamingConfig | None:
@@ -319,7 +338,7 @@ def run_cycle(db: Session, cfg: StreamingConfig, *, force: bool = False) -> dict
     # Initialise the cursor from the loaded baseline (only rows newer than what's loaded stream in).
     if cfg.last_watermark is None:
         d0, t0 = ora2pg_runner.target_max_watermark(table.target_table, ts_col, time_col, numeric=sequence)
-        cfg.last_watermark = d0 if d0 is not None else "0"
+        cfg.last_watermark = clamp_day_cursor(d0, gran, sequence) if d0 is not None else "0"
         cfg.last_watermark_time = t0 if not sequence else None
 
     predicate = build_streaming_predicate(
@@ -334,7 +353,7 @@ def run_cycle(db: Session, cfg: StreamingConfig, *, force: bool = False) -> dict
     if res.get("ok"):
         d2, t2 = ora2pg_runner.target_max_watermark(table.target_table, ts_col, time_col, numeric=sequence)
         if d2 is not None:
-            cfg.last_watermark = d2
+            cfg.last_watermark = clamp_day_cursor(d2, gran, sequence)
             if gran == "timestamp" and not sequence:
                 cfg.last_watermark_time = t2
         return _finish(db, cfg, table, ok=True, status="ok", error=None,
